@@ -20,7 +20,7 @@ const db  = getDatabase(app);
 
 // passe diese beiden Konstanten bei Bedarf an deine Domain an
 const clientId     = "5d0dd83f585a4ad3b9c28d86185df6a6";
-const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app/"; // exakt so in Spotify eingetragen
+const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app"; // exakt so in Spotify eingetragen
 const playlistURI  = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2";
 const tokenEndpoint = "/api/spotify-token"; // eigener Vercel-Endpoint
 
