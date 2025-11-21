@@ -19,7 +19,7 @@ const db  = getDatabase(app);
 // ============== Spotify Login mit PKCE & Player ==============
 
 const clientId = "5d0dd83f585a4ad3b9c28d86185df6a6"; // deine Client ID
-const redirectUri = "https://dein-quiz-name.vercel.app/"; // muss im Dashboard eingetragen sein
+const redirectUri = "https://weihnachtsfeier-quiz-br59eqjdq-julias-projects-6a59bf04.vercel.app/"; // muss im Dashboard eingetragen sein
 const playlistURI = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2"; // deine Playlist
 const tokenEndpoint = "https://spotify-auth-server-5yebdxbsr-julias-projects-6a59bf04.vercel.app/api/spotify-token";
 
