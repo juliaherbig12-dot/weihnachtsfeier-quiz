@@ -20,7 +20,7 @@ const db  = getDatabase(app);
 
 // ACHTUNG: hier ist deine Vercel-Domain eingetragen
 const clientId     = "5d0dd83f585a4ad3b9c28d86185df6a6";
-const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app";
+const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app/?code=AQBqMXCIYYxjEps__QAQr8FR1b64IKzKK1cR1XEvTCwbEoIoe4utB00vyo7GkfpRtAZEI4dOnIHLVyFDebfCMoRq7qa72dCU86_qBrlAiliDtcErJ7rvHjetOGpTQm1Wg4zj8t88evYo3xykMvC78d04dk-2wayBj4_r9waywcQFaRhQQPsbm30rUwRzxXTdWa4szPljhGh7pjaMZL-i0aGsLnRBOZFY7PxXDjHQT3YpVoCvvRag-FgRGkiyl7Xp3OslP8ZdHkfSOKBKTjVFsrXZ8x0BEvyG_f7lcNAbJkN38KxGsIOEa-GDa1AALbJmCOogyxGlNS_2pbJbSyfY9FrRZ-4j6UwJL3TEytdrJovILd1dWuQEMzYgO6bt2QYm-ScT";
 const playlistURI  = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2";
 const tokenEndpoint = "https://spotify-auth-server-5yebdxbsr-julias-projects-6a59bf04.vercel.app/api/spotify-token";
 
