@@ -20,7 +20,7 @@ const db  = getDatabase(app);
 
 // ACHTUNG: hier ist deine Vercel-Domain eingetragen
 const clientId     = "5d0dd83f585a4ad3b9c28d86185df6a6";
-const redirectUri  = "https://weihnachtsfeier-quiz-br59eqjdq-julias-projects-6a59bf04.vercel.app/";
+const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app";
 const playlistURI  = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2";
 const tokenEndpoint = "https://spotify-auth-server-5yebdxbsr-julias-projects-6a59bf04.vercel.app/api/spotify-token";
 
