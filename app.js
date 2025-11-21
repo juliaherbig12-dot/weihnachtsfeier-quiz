@@ -18,15 +18,16 @@ const db  = getDatabase(app);
 
 // ============== Spotify PKCE + Player (über Vercel) ==============
 
-// ACHTUNG: hier ist deine Vercel-Domain eingetragen
+// passe diese beiden Konstanten bei Bedarf an deine Domain an
 const clientId     = "5d0dd83f585a4ad3b9c28d86185df6a6";
-const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app";
+const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app/"; // exakt so in Spotify eingetragen
 const playlistURI  = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2";
-const tokenEndpoint = "/api/spotify-token";
+const tokenEndpoint = "/api/spotify-token"; // eigener Vercel-Endpoint
 
 let currentQuestionIndex = 0;
-let spotifyToken = null;
+let spotifyToken   = null;
 let spotifyDeviceId = null;
+let spotifyPlayer  = null; // WICHTIG: globaler Player nur auf dem Host
 
 // ---------- PKCE-Helfer ----------
 function generateCodeVerifier(length = 64) {
@@ -129,7 +130,7 @@ async function exchangeCodeForToken(code) {
   }
 }
 
-// ---------- Player erzeugen & Snippets abspielen ----------
+// ---------- Player erzeugen (nur auf dem Host) ----------
 async function createSpotifyPlayer() {
   if (!spotifyToken) {
     console.warn("[spotify] Kein Token, Player wird nicht erstellt.");
@@ -142,55 +143,53 @@ async function createSpotifyPlayer() {
     return;
   }
 
-  const player = new Spotify.Player({
+  spotifyPlayer = new Spotify.Player({
     name: "Emoji-Quiz Player",
     getOAuthToken: cb => cb(spotifyToken),
     volume: 0.8
   });
 
-  player.addListener("initialization_error", ({ message }) => console.error("[spotify] init_error:", message));
-  player.addListener("authentication_error", ({ message }) => console.error("[spotify] auth_error:", message));
-  player.addListener("account_error", ({ message }) => console.error("[spotify] account_error:", message));
-  player.addListener("playback_error", ({ message }) => console.error("[spotify] playback_error:", message));
+  spotifyPlayer.addListener("initialization_error", ({ message }) => console.error("[spotify] init_error:", message));
+  spotifyPlayer.addListener("authentication_error", ({ message }) => console.error("[spotify] auth_error:", message));
+  spotifyPlayer.addListener("account_error", ({ message }) => console.error("[spotify] account_error:", message));
+  spotifyPlayer.addListener("playback_error", ({ message }) => console.error("[spotify] playback_error:", message));
 
-  player.addListener("ready", ({ device_id }) => {
+  spotifyPlayer.addListener("ready", ({ device_id }) => {
     spotifyDeviceId = device_id;
     console.log("[spotify] Player bereit, Device ID:", device_id);
-
-    function playSongSnippet() {
-      if (!spotifyDeviceId || !spotifyToken) return;
-
-      fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${spotifyToken}`
-        },
-        body: JSON.stringify({
-          context_uri: playlistURI,
-          offset: { position: currentQuestionIndex },
-          position_ms: 30000
-        })
-      }).catch(e => console.error("[spotify] play failed:", e));
-
-      setTimeout(() => {
-        player.pause().catch(e => console.warn("[spotify] pause failed:", e));
-      }, 20000);
-    }
-
-    const solutionBox = document.getElementById("solutionBox");
-    if (solutionBox) {
-      const observer = new MutationObserver(() => {
-        if (!solutionBox.classList.contains("hidden")) {
-          playSongSnippet();
-          currentQuestionIndex++;
-        }
-      });
-      observer.observe(solutionBox, { attributes: true, attributeFilter: ["class"] });
-    }
   });
 
-  player.connect();
+  spotifyPlayer.connect();
+}
+
+// ---------- Snippet abspielen (nur Host ruft das auf!) ----------
+async function playSongSnippetForRound(roundIndex) {
+  if (!spotifyToken || !spotifyDeviceId || !spotifyPlayer) {
+    console.warn("[spotify] Player noch nicht bereit – kein Snippet.");
+    return;
+  }
+
+  try {
+    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${spotifyToken}`
+      },
+      body: JSON.stringify({
+        context_uri: playlistURI,
+        offset: { position: roundIndex },
+        position_ms: 30000
+      })
+    });
+
+    // nach 20 Sekunden stoppen
+    setTimeout(() => {
+      spotifyPlayer.pause().catch(e => console.warn("[spotify] pause failed:", e));
+    }, 20000);
+  } catch (e) {
+    console.error("[spotify] play failed:", e);
+  }
 }
 
 // ---------- Beim Laden Redirect von Spotify behandeln ----------
@@ -400,6 +399,9 @@ async function autoRoundLoop(){
     phaseLabel.textContent = "Lösung";
     solutionText.textContent = "Lösung: " + QUESTIONS[r].title;
     solutionText.classList.remove("hidden");
+
+    // >>> HIER: NUR DER HOST RUFT DAS AUF <<<
+    playSongSnippetForRound(r);
 
     await renderAnswersForReview(r);
     await renderTop5();
