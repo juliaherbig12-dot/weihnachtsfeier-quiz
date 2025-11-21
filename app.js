@@ -1,4 +1,4 @@
-console.log("[boot] app.js geladen");
+console.log("[boot] app.js geladen (finale Vercel-Version)");
 
 // ============== Firebase Setup ==============
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -16,18 +16,19 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
-// ============== Spotify Login mit PKCE & Player ==============
+// ============== Spotify PKCE + Player (über Vercel) ==============
 
-const clientId = "5d0dd83f585a4ad3b9c28d86185df6a6"; // deine Client ID
-const redirectUri = "https://weihnachtsfeier-quiz-br59eqjdq-julias-projects-6a59bf04.vercel.app/"; // muss im Dashboard eingetragen sein
-const playlistURI = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2"; // deine Playlist
+// ACHTUNG: hier ist deine Vercel-Domain eingetragen
+const clientId     = "5d0dd83f585a4ad3b9c28d86185df6a6";
+const redirectUri  = "https://weihnachtsfeier-quiz-br59eqjdq-julias-projects-6a59bf04.vercel.app/";
+const playlistURI  = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2";
 const tokenEndpoint = "https://spotify-auth-server-5yebdxbsr-julias-projects-6a59bf04.vercel.app/api/spotify-token";
 
 let currentQuestionIndex = 0;
 let spotifyToken = null;
 let spotifyDeviceId = null;
 
-// ---------- PKCE Helfer ----------
+// ---------- PKCE-Helfer ----------
 function generateCodeVerifier(length = 64) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
   let out = "";
@@ -42,8 +43,21 @@ async function generateCodeChallenge(verifier) {
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// ---------- Spotify Login starten ----------
+// ---------- Spotify SDK dynamisch laden ----------
+function loadSpotifySDK() {
+  return new Promise((resolve, reject) => {
+    if (window.Spotify) return resolve();
+    const s = document.createElement("script");
+    s.src = "https://sdk.scdn.co/spotify-player.js";
+    s.onload = () => resolve();
+    s.onerror = (e) => reject(e);
+    document.body.appendChild(s);
+  });
+}
+
+// ---------- Spotify Login ----------
 async function loginSpotify() {
+  console.log("[spotify] Login gestartet");
   const verifier = generateCodeVerifier();
   localStorage.setItem("spotify_pkce_verifier", verifier);
 
@@ -65,14 +79,16 @@ async function loginSpotify() {
     scope
   });
 
-  window.location.href = "https://accounts.spotify.com/authorize?" + params.toString();
+  const url = "https://accounts.spotify.com/authorize?" + params.toString();
+  console.log("[spotify] AUTH URL:", url);
+  window.location.href = url;
 }
 
 // ---------- Code -> Token (über deinen Vercel-Server) ----------
 async function exchangeCodeForToken(code) {
   const verifier = localStorage.getItem("spotify_pkce_verifier");
   if (!verifier) {
-    console.warn("[spotify] Kein PKCE-Verifier gefunden.");
+    console.warn("[spotify] Kein PKCE-Verifier im localStorage.");
     return null;
   }
 
@@ -96,7 +112,7 @@ async function exchangeCodeForToken(code) {
 
     spotifyToken = data.access_token;
     localStorage.setItem("spotify_access_token", spotifyToken);
-    console.log("[spotify] Access Token erhalten (gekürzt):", spotifyToken.slice(0, 8) + "…");
+    console.log("[spotify] Access Token erhalten:", spotifyToken.slice(0, 8) + "…");
 
     // Code aus URL entfernen
     try {
@@ -113,82 +129,85 @@ async function exchangeCodeForToken(code) {
   }
 }
 
-// ---------- Spotify Player Setup ----------
-function initSpotifyPlayer() {
+// ---------- Player erzeugen & Snippets abspielen ----------
+async function createSpotifyPlayer() {
   if (!spotifyToken) {
-    console.warn("[spotify] Kein Token, Player wird nicht initialisiert.");
+    console.warn("[spotify] Kein Token, Player wird nicht erstellt.");
     return;
   }
 
-  // Nur eine Definition!
-  window.onSpotifyWebPlaybackSDKReady = () => {
-    const player = new Spotify.Player({
-      name: "Emoji-Quiz Player",
-      getOAuthToken: cb => cb(spotifyToken),
-      volume: 0.8
-    });
+  await loadSpotifySDK();
+  if (!window.Spotify) {
+    console.error("[spotify] SDK nicht verfügbar.");
+    return;
+  }
 
-    player.addListener("initialization_error", ({ message }) => console.error("[spotify] init_error:", message));
-    player.addListener("authentication_error", ({ message }) => console.error("[spotify] auth_error:", message));
-    player.addListener("account_error", ({ message }) => console.error("[spotify] account_error:", message));
-    player.addListener("playback_error", ({ message }) => console.error("[spotify] playback_error:", message));
+  const player = new Spotify.Player({
+    name: "Emoji-Quiz Player",
+    getOAuthToken: cb => cb(spotifyToken),
+    volume: 0.8
+  });
 
-    player.addListener("ready", ({ device_id }) => {
-      spotifyDeviceId = device_id;
-      console.log("[spotify] Player bereit, Device ID:", device_id);
+  player.addListener("initialization_error", ({ message }) => console.error("[spotify] init_error:", message));
+  player.addListener("authentication_error", ({ message }) => console.error("[spotify] auth_error:", message));
+  player.addListener("account_error", ({ message }) => console.error("[spotify] account_error:", message));
+  player.addListener("playback_error", ({ message }) => console.error("[spotify] playback_error:", message));
 
-      function playSongSnippet() {
-        if (!spotifyDeviceId || !spotifyToken) return;
+  player.addListener("ready", ({ device_id }) => {
+    spotifyDeviceId = device_id;
+    console.log("[spotify] Player bereit, Device ID:", device_id);
 
-        fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${spotifyToken}`
-          },
-          body: JSON.stringify({
-            context_uri: playlistURI,
-            offset: { position: currentQuestionIndex },
-            position_ms: 30000
-          })
-        }).catch(e => console.error("[spotify] play failed:", e));
+    function playSongSnippet() {
+      if (!spotifyDeviceId || !spotifyToken) return;
 
-        setTimeout(() => {
-          player.pause().catch(e => console.warn("[spotify] pause failed:", e));
-        }, 20000);
-      }
+      fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${spotifyToken}`
+        },
+        body: JSON.stringify({
+          context_uri: playlistURI,
+          offset: { position: currentQuestionIndex },
+          position_ms: 30000
+        })
+      }).catch(e => console.error("[spotify] play failed:", e));
 
-      // Beobachte, wann beim Spieler die Lösung eingeblendet wird
-      const solutionBox = document.getElementById("solutionBox");
-      if (solutionBox) {
-        const observer = new MutationObserver(() => {
-          if (!solutionBox.classList.contains("hidden")) {
-            playSongSnippet();
-            currentQuestionIndex++;
-          }
-        });
-        observer.observe(solutionBox, { attributes: true, attributeFilter: ["class"] });
-      }
-    });
+      setTimeout(() => {
+        player.pause().catch(e => console.warn("[spotify] pause failed:", e));
+      }, 20000);
+    }
 
-    player.connect();
-  };
+    const solutionBox = document.getElementById("solutionBox");
+    if (solutionBox) {
+      const observer = new MutationObserver(() => {
+        if (!solutionBox.classList.contains("hidden")) {
+          playSongSnippet();
+          currentQuestionIndex++;
+        }
+      });
+      observer.observe(solutionBox, { attributes: true, attributeFilter: ["class"] });
+    }
+  });
+
+  player.connect();
 }
 
-// ---------- Beim Laden prüfen, ob wir von Spotify zurückkamen ----------
+// ---------- Beim Laden Redirect von Spotify behandeln ----------
 async function handleSpotifyRedirect() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
 
   if (code) {
+    console.log("[spotify] Code aus Redirect:", code);
     const tok = await exchangeCodeForToken(code);
-    if (tok) initSpotifyPlayer();
+    if (tok) await createSpotifyPlayer();
   } else {
-    // Vielleicht haben wir schon mal einen Token gespeichert
     const stored = localStorage.getItem("spotify_access_token");
     if (stored) {
       spotifyToken = stored;
-      initSpotifyPlayer();
+      console.log("[spotify] Token aus localStorage.");
+      await createSpotifyPlayer();
     }
   }
 }
