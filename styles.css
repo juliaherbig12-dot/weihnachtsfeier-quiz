@@ -1,0 +1,109 @@
+:root{
+    --bg:#06101a; --card:#0e1b2f; --ink:#f6f8ff; --muted:#c7cde6;
+    --gold:#f6c453; --red:#e74a3b; --green:#15a34a; --input:#152646; --border:#233a63;
+  }
+  
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  
+  body{
+    margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 800px at 10% -10%, #142646 0%, transparent 60%),
+      radial-gradient(1200px 800px at 100% 0%, #132241 0%, transparent 60%),
+      linear-gradient(#06101a, #06101a);
+    display:flex; align-items:flex-start; justify-content:center;
+  }
+  
+  .wrap{width:min(100%, 980px); padding:clamp(12px,2.4vw,24px)}
+  
+  .card{
+    background:linear-gradient(180deg,#0f1d35,#0b1630);
+    border:1px solid var(--border); border-radius:18px; padding:clamp(14px,2vw,20px);
+    box-shadow:0 12px 40px rgba(0,0,0,.35);
+  }
+  
+  /* Varianten, die vorher inline gesetzt waren */
+  .card--dark1{ background:#0b1429; }
+  .card--dark2{ background:#0a1428; }
+  
+  h1,h2,h3{margin:0 0 12px}
+  .title{font-size:clamp(20px,3.6vw,28px); letter-spacing:.3px}
+  .lead{color:var(--muted); font-size:clamp(14px,2.4vw,16px)}
+  
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .between{ justify-content:space-between; }      /* ersetzte inline-Styles */
+  .mt-1{ margin-top:1rem; }                       /* ersetzte inline-Styles */
+  
+  .input{
+    flex:1; min-width:0; border:1px solid #2b3a59; background:var(--input);
+    color:var(--ink); padding:12px 14px; border-radius:12px;
+    font-size:clamp(14px,2.6vw,16px); outline:none
+  }
+  
+  
+  .btn{
+    background:var(--red); color:#fff; border:none; border-radius:12px;
+    padding:12px 16px; font-weight:700; font-size:clamp(14px,2.8vw,16px); cursor:pointer
+  }
+  .btn.secondary{background:#0f8b6d}
+  .btn.ghost{background:#334155}
+  .btn:disabled{opacity:.6; cursor:not-allowed}
+  button.btn.spotify {
+    background: var(--green);
+    color: #fff;
+  }
+  
+  .emoji{
+    font-size:clamp(36px,10vw,72px); text-align:center; padding:18px 0
+  }
+  .pill{
+    background:#0f1b2f; border:1px solid #233353; color:#c8d1ea;
+    padding:8px 12px; border-radius:999px; font-size:clamp(12px,2.4vw,13px)
+  }
+  .sp{height:12px}
+  .hidden{display:none!important}
+  .meta{color:var(--muted); font-size:clamp(12px,2.4vw,14px)}
+  .center{text-align:center}
+  .big{font-size:clamp(16px,3.4vw,20px)}
+  
+  .playerRow{
+    display:flex; justify-content:space-between; align-items:center;
+    background:#0b1429; border:1px solid #1f2f55; border-radius:10px; padding:8px 12px
+  }
+  
+  .grid{display:grid; grid-template-columns:1fr; gap:10px}
+  @media(min-width:740px){.grid{grid-template-columns:1fr 1fr}}
+  
+  .snow{
+    position:fixed; inset:0; pointer-events:none; opacity:.22;
+    background:
+      radial-gradient(4px 4px at 10% 20%, #ffffff 42%, transparent 43%),
+      radial-gradient(4px 4px at 30% 80%, #ffffff 42%, transparent 43%),
+      radial-gradient(4px 4px at 60% 30%, #ffffff 42%, transparent 43%),
+      radial-gradient(4px 4px at 80% 60%, #ffffff 42%, transparent 43%),
+      radial-gradient(4px 4px at 50% 50%, #ffffff 42%, transparent 43%);
+    animation:snow 10s linear infinite;
+  }
+  @keyframes snow{
+    0%{background-position:0 0, 20% 0, 40% 0, 60% 0, 80% 0}
+    100%{background-position:0 1000px, 20% 1000px, 40% 1000px, 60% 1000px, 80% 1000px}
+  }
+  
+  .spin{display:inline-block; animation:spin 2s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  
+  .progressOuter{height:8px; background:#0c1326; border:1px solid #233353; border-radius:999px; overflow:hidden}
+  .progressInner{height:100%; background:linear-gradient(90deg,#22c55e,#f6c453); width:0%}
+  
+  ol{padding-left:20px}
+  .resultIcon{font-size:clamp(28px,8vw,48px)}
+  .big.correct{color:#86efac}
+  .big.wrong{color:#fca5a5}
+  
+  .tag{
+    display:inline-block;padding:4px 8px;border-radius:999px;
+    background:#152646;border:1px solid #233a63;font-size:12px;color:#c7cde6
+  }
+  

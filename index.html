@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weihnachts-Musik-Quiz 🎄</title>
+  <!--<link rel="stylesheet" href="fstyle.css" />-->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+<div class="snow"></div>
+<div class="wrap">
+
+  <!-- HOST -->
+  <section id="screen-host" class="card">
+    <h1 class="title">Weihnachts-Musik-Quiz🎄</h1>
+    <div class="brand center">
+  <!--<h1 class="title">⚽ Weihnachts-Musik-Quiz🎄</h1>
+  <p class="lead">Wer erzielt die meisten Treffer?</p>-->
+</div>
+
+    <p class="lead">
+     Spiel-Modus: 45 s Antwortzeit, Lösungseinblendung. <br>
+      Das Quiz startet erst, wenn du <b>„Spiel starten“</b> klickst.
+    </p>
+
+    <div class="sp"></div>
+    <div class="row">
+      <button id="createGameBtn" class="btn">Neues Spiel erstellen</button>
+      <input id="joinGameIdHost" class="input" placeholder="Mit bestehender Spiel-ID als Gasthost verbinden…" />
+      <button id="joinHostBtn" class="btn secondary">Als Gasthost verbinden</button>
+    </div>
+    <div id="hostPanel" class="hidden">
+
+      <div class="sp"></div>
+      <div class="card card--dark1">
+        <h3>Teilen</h3>
+        <p class="meta">Link für Mitspieler:</p>
+        <div class="row">
+          <input id="shareLink" class="input" readonly />
+          <button id="copyLinkBtn" class="btn ghost">Link kopieren</button>
+        </div>
+      </div>
+
+      <!-- Lobby -->
+      <div class="sp"></div>
+      <div class="card card--dark1" id="lobbyArea">
+        <h3>Lobby</h3>
+        <p class="meta">Warten auf Mitspieler …</p>
+        <div id="playerList" class="grid"></div>
+        <button id="startGameBtn" class="btn mt-1">Spiel starten🎅</button>
+      
+        <!-- Spotify Login Button -->
+        <button id="spotifyLoginBtn" class="btn spotify mt-1">Spotify verbinden</button>
+      </div>
+
+
+      <div class="sp"></div>
+      <div class="card card--dark2">
+        <div class="row between">
+          <div class="pill">Spiel-ID: <b id="gameIdHost">—</b></div>
+          <div class="pill">Phase: <b id="phaseLabel">—</b></div>
+          <div class="pill">Runde: <b><span id="roundNow">1</span>/<span id="roundTotal">14</span></b></div>
+        </div>
+        <div class="sp"></div>
+        <div class="progressOuter"><div id="progressBar" class="progressInner"></div></div>
+        <div class="sp"></div>
+        <div id="hostEmoji" class="emoji center">🎄</div>
+        <div id="solutionText" class="center big hidden"></div>
+        <div class="sp"></div>
+        <h3>Top 5 dieser Runde</h3>
+        <div id="top5" class="grid"></div>
+
+        <div class="sp"></div>
+        <h3>Antworten prüfen</h3>
+        <p class="meta">Markiere Antworten als ✅ richtig oder ❌ falsch; speichere dann deine Korrekturen.</p>
+        <div id="answerReview" class="grid"></div>
+        <button id="saveManualBtn" class="btn ghost mt-1">Korrektur speichern</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAYER JOIN -->
+  <section id="screen-join" class="card hidden">
+    <h2 class="title">Spiel beitreten</h2>
+    <div class="row">
+      <input id="joinGameId" class="input" placeholder="Spiel-ID…" />
+      <input id="playerName" class="input" placeholder="Dein Name…" />
+      <button id="enterBtn" class="btn">Mitspielen</button>
+    </div>
+  </section>
+
+  <!-- PLAYER GAME -->
+  <section id="screen-player" class="card hidden">
+    <div class="row between">
+      <div class="pill">Spiel-ID: <b id="gameIdSmall">—</b></div>
+      <div class="pill">Runde: <b><span id="roundNowP">1</span>/<span id="roundTotalP">14</span></b></div>
+    </div>
+    <div class="sp"></div>
+
+    <div id="waitBox" class="center">
+      <div class="emoji"><span class="spin">🎄</span></div>
+      <!--<p class="meta">Warte auf die nächste Frage …</p>-->
+    </div>
+
+    <div id="questionBox" class="hidden">
+      <div id="emoji" class="emoji center">🎵❓</div>
+      <div class="progressOuter"><div id="progressBarP" class="progressInner"></div></div>
+      <div class="sp"></div>
+      <div class="row">
+        <input id="answer" class="input" autocomplete="off" placeholder="Songtitel eintippen…" />
+        <button id="submitBtn" class="btn">Eingeben</button>
+      </div>
+      <div class="sp"></div>
+      <div id="savedMsg" class="center meta hidden">Antwort gespeichert.</div>
+    </div>
+
+    <div id="solutionBox" class="hidden">
+      <div class="resultIcon" id="resultIcon">✅</div>
+      <p class="center big" id="resultText">Richtig!</p>
+      <p class="center meta" id="solutionTextP">Lösung: </p>
+      <p class="center meta">Es geht gleich weiter...</p>
+    </div>
+  </section>
+ <!-- RESULT -->
+    <section id="screen-result" class="card hidden">
+      <h2 class="title">Gesamtergebnis</h2>
+      <div id="finalBoard" class="grid"></div>
+      <div class="sp"></div>
+      <button id="dismissPlayersBtn" class="btn">Teilnehmer zurück zur Startseite schicken</button>
+      <button id="restartBtn" class="btn ghost">Zurück zum Start</button>
+    </section>
+  </div>
+
+  <!-- WICHTIG: Modul-Script von Root laden -->
+  <script type="module" src="/app.js?v=1"></script>
+
+
+<!-- Für Fußball-Weihnachtsfeier -->
+
+<!--<script>
+  // dynamischer Fußball-Schneefall 🎄⚽
+  const snowContainer = document.querySelector('.snow');
+  const BALLS = 25; // Anzahl der fallenden ⚽
+
+  for (let i = 0; i < BALLS; i++) {
+    const ball = document.createElement('div');
+    ball.textContent = '⚽';
+    ball.style.position = 'absolute';
+    ball.style.left = Math.random() * 100 + '%';
+    ball.style.top = Math.random() * -50 + 'vh';
+    ball.style.fontSize = (16 + Math.random() * 24) + 'px';
+    ball.style.opacity = 0.25 + Math.random() * 0.5;
+    ball.style.animation = `fall${i} ${6 + Math.random() * 8}s linear infinite`;
+    snowContainer.appendChild(ball);
+
+    // individuelle Keyframe-Animation erzeugen
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes fall${i} {
+        0% { transform: translateY(0) rotate(0deg); }
+        100% { transform: translateY(120vh) rotate(${Math.random()>0.5?360:-360}deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+</script>-->
+
+</body>
+</html>
