@@ -28,6 +28,13 @@ let spotifyDeviceId = null;
 let spotifyPlayer  = null;
 let currentQuestionIndex = 0;
 
+// --- Sofort Musik stoppen (für "Weiter zur nächsten Frage") ---
+function stopSnippetImmediately() {
+  if (spotifyPlayer) {
+    spotifyPlayer.pause().catch(err => console.warn("[spotify] stop failed:", err));
+  }
+}
+
 // ---------- PKCE ----------
 function generateCodeVerifier(length = 64) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
@@ -437,14 +444,17 @@ async function autoRoundLoop(){
 
     // Weiter-Button
     const nextBtn = document.createElement("button");
-    nextBtn.className = "btn mt-1";
     nextBtn.textContent = "Weiter zur nächsten Frage";
-
+    nextBtn.className = "btn mt-1";
     solutionText.insertAdjacentElement("afterend", nextBtn);
-
-    await new Promise(res=> nextBtn.onclick = ()=>{ nextBtn.remove(); res(); });
-  }
-
+    
+    await new Promise(res => {
+      nextBtn.onclick = () => {
+        stopSnippetImmediately();   // <<< HIER STOPPEN
+        nextBtn.remove();
+        res();
+      };
+    });
   // ► PHASE 3: ENDE
   await update(ref(db, `games/${gameId}/state`), { 
     phase:"end", 
