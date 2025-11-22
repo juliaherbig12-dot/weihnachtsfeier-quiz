@@ -197,10 +197,10 @@ const QUESTIONS = [
   { emoji:"🎼🔊🔔", title:"Kling, Glöckchen, klingelingeling", startMs: 12000 },
   { emoji:"😁❤️😂💃🎅🏼", title:"Lasst uns froh und munter sein", startMs: 16000 },
   { emoji:"🔔🔔🔔", title:"Jingle Bells", startMs: 29000 },
-  { emoji:"🔴👃🦌", title:"Rudolph the Red-Nosed Reindeer", startMs: 5000 },
+  { emoji:"🔴👃🦌", title:"Rudolph the Red Nosed Reindeer", startMs: 5000 },
   { emoji:"🎄🔙🤲🫵❤️", title:"Last Christmas", startMs: 17000 },
   { emoji:"📝1️⃣🎁🫵", title:"All I Want for Christmas Is You", startMs: 85000 },
-  { emoji:"😲👶👐", title:"Oh, Kinderlein kommet", startMs: 15000 },
+  { emoji:"😲👶👐", title:"Ihr Kinderlein kommet", startMs: 15000 },
   { emoji:"👥🗣️😁🎄😂🆕🗓️", title:"We Wish You a Merry Christmas", startMs: 6000 },
   { emoji:"🔜👶❓🎁🔜😁", title:"Morgen, Kinder, wird’s was geben", startMs: 7000 }
 ];
