@@ -18,18 +18,17 @@ const db  = getDatabase(app);
 
 // ============== Spotify PKCE + Player (über Vercel) ==============
 
-// passe diese beiden Konstanten bei Bedarf an deine Domain an
 const clientId     = "5d0dd83f585a4ad3b9c28d86185df6a6";
-const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app"; // exakt so in Spotify eingetragen
+const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app"; 
 const playlistURI  = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2";
-const tokenEndpoint = "/api/spotify-token"; // eigener Vercel-Endpoint
+const tokenEndpoint = "/api/spotify-token";
 
-let currentQuestionIndex = 0;
 let spotifyToken   = null;
 let spotifyDeviceId = null;
-let spotifyPlayer  = null; // WICHTIG: globaler Player nur auf dem Host
+let spotifyPlayer  = null;
+let currentQuestionIndex = 0;
 
-// ---------- PKCE-Helfer ----------
+// ---------- PKCE ----------
 function generateCodeVerifier(length = 64) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
   let out = "";
@@ -44,31 +43,27 @@ async function generateCodeChallenge(verifier) {
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// ---------- Spotify SDK dynamisch laden ----------
+// ---------- Spotify SDK laden ----------
 function loadSpotifySDK() {
   return new Promise((resolve, reject) => {
     if (window.Spotify) return resolve();
     const s = document.createElement("script");
     s.src = "https://sdk.scdn.co/spotify-player.js";
-    s.onload = () => resolve();
-    s.onerror = (e) => reject(e);
+    s.onload = resolve;
+    s.onerror = reject;
     document.body.appendChild(s);
   });
 }
 
-// ---------- Spotify Login ----------
+// ---------- Login ----------
 async function loginSpotify() {
-  console.log("[spotify] Login gestartet");
   const verifier = generateCodeVerifier();
   localStorage.setItem("spotify_pkce_verifier", verifier);
 
   const challenge = await generateCodeChallenge(verifier);
   const scope = [
-    "streaming",
-    "user-read-email",
-    "user-read-private",
-    "user-modify-playback-state",
-    "user-read-playback-state"
+    "streaming","user-read-email","user-read-private",
+    "user-modify-playback-state","user-read-playback-state"
   ].join(" ");
 
   const params = new URLSearchParams({
@@ -80,68 +75,45 @@ async function loginSpotify() {
     scope
   });
 
-  const url = "https://accounts.spotify.com/authorize?" + params.toString();
-  console.log("[spotify] AUTH URL:", url);
-  window.location.href = url;
+  window.location.href = "https://accounts.spotify.com/authorize?" + params.toString();
 }
 
-// ---------- Code -> Token (über deinen Vercel-Server) ----------
+// ---------- Code -> Token ----------
 async function exchangeCodeForToken(code) {
   const verifier = localStorage.getItem("spotify_pkce_verifier");
-  if (!verifier) {
-    console.warn("[spotify] Kein PKCE-Verifier im localStorage.");
-    return null;
-  }
+
+  const resp = await fetch(tokenEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      code,
+      codeVerifier: verifier,
+      redirectUri,
+      clientId
+    })
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) return null;
+
+  spotifyToken = data.access_token;
+  localStorage.setItem("spotify_access_token", spotifyToken);
 
   try {
-    const resp = await fetch(tokenEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code,
-        codeVerifier: verifier,
-        redirectUri,
-        clientId
-      })
-    });
+    const url = new URL(window.location.href);
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    history.replaceState({}, document.title, url.pathname);
+  } catch {}
 
-    const data = await resp.json();
-    if (!resp.ok) {
-      console.error("[spotify] Token-Server-Fehler:", data);
-      return null;
-    }
-
-    spotifyToken = data.access_token;
-    localStorage.setItem("spotify_access_token", spotifyToken);
-    console.log("[spotify] Access Token erhalten:", spotifyToken.slice(0, 8) + "…");
-
-    // Code aus URL entfernen
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("code");
-      url.searchParams.delete("state");
-      history.replaceState({}, document.title, url.pathname + url.search);
-    } catch (_) {}
-
-    return spotifyToken;
-  } catch (err) {
-    console.error("[spotify] Fehler beim Token-Abruf:", err);
-    return null;
-  }
+  return spotifyToken;
 }
 
-// ---------- Player erzeugen (nur auf dem Host) ----------
+// ---------- Spotify Player ----------
 async function createSpotifyPlayer() {
-  if (!spotifyToken) {
-    console.warn("[spotify] Kein Token, Player wird nicht erstellt.");
-    return;
-  }
+  if (!spotifyToken) return;
 
   await loadSpotifySDK();
-  if (!window.Spotify) {
-    console.error("[spotify] SDK nicht verfügbar.");
-    return;
-  }
 
   spotifyPlayer = new Spotify.Player({
     name: "Emoji-Quiz Player",
@@ -149,25 +121,22 @@ async function createSpotifyPlayer() {
     volume: 0.8
   });
 
-  spotifyPlayer.addListener("initialization_error", ({ message }) => console.error("[spotify] init_error:", message));
-  spotifyPlayer.addListener("authentication_error", ({ message }) => console.error("[spotify] auth_error:", message));
-  spotifyPlayer.addListener("account_error", ({ message }) => console.error("[spotify] account_error:", message));
-  spotifyPlayer.addListener("playback_error", ({ message }) => console.error("[spotify] playback_error:", message));
-
   spotifyPlayer.addListener("ready", ({ device_id }) => {
     spotifyDeviceId = device_id;
-    console.log("[spotify] Player bereit, Device ID:", device_id);
+    console.log("[spotify] Player bereit:", device_id);
   });
 
   spotifyPlayer.connect();
 }
-
-// ---------- Snippet abspielen (nur Host ruft das auf!) ----------
+// ---------- Song-Snippet abspielen (Host Only) ----------
 async function playSongSnippetForRound(roundIndex) {
   if (!spotifyToken || !spotifyDeviceId || !spotifyPlayer) {
-    console.warn("[spotify] Player noch nicht bereit – kein Snippet.");
+    console.warn("[spotify] Player nicht bereit.");
     return;
   }
+
+  const defaultStartMs = 30000;
+  const startMs = QUESTIONS[roundIndex]?.startMs ?? defaultStartMs;
 
   try {
     await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
@@ -179,33 +148,31 @@ async function playSongSnippetForRound(roundIndex) {
       body: JSON.stringify({
         context_uri: playlistURI,
         offset: { position: roundIndex },
-        position_ms: 30000
+        position_ms: startMs
       })
     });
 
-    // nach 20 Sekunden stoppen
     setTimeout(() => {
       spotifyPlayer.pause().catch(e => console.warn("[spotify] pause failed:", e));
     }, 20000);
-  } catch (e) {
-    console.error("[spotify] play failed:", e);
+
+  } catch (err) {
+    console.error("[spotify] play failed:", err);
   }
 }
 
-// ---------- Beim Laden Redirect von Spotify behandeln ----------
+// ---------- Redirect Handling ----------
 async function handleSpotifyRedirect() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
 
   if (code) {
-    console.log("[spotify] Code aus Redirect:", code);
     const tok = await exchangeCodeForToken(code);
     if (tok) await createSpotifyPlayer();
   } else {
     const stored = localStorage.getItem("spotify_access_token");
     if (stored) {
       spotifyToken = stored;
-      console.log("[spotify] Token aus localStorage.");
       await createSpotifyPlayer();
     }
   }
@@ -213,12 +180,12 @@ async function handleSpotifyRedirect() {
 
 // ============== Quiz-Daten ==============
 const QUESTIONS = [
-  { emoji:"🤫🌌😇🌌", title:"Stille Nacht, heilige Nacht", startMs: 15000 }, // ab 15s
+  { emoji:"🤫🌌😇🌌", title:"Stille Nacht, heilige Nacht", startMs: 15000 },
   { emoji:"🎄🌿", title:"O Tannenbaum", startMs: 14000 },
   { emoji:"🤫🌨️❄️", title:"Leise rieselt der Schnee", startMs: 16000 },
   { emoji:"🗓️🔁", title:"Alle Jahre wieder", startMs: 9000 },
   { emoji:"😲🫵😁", title:"O du fröhliche", startMs: 8000 },
-  { emoji:"🎼🔊🔔", title:"Kling, Glöckchen, klingelingeling" , startMs: 12000 },
+  { emoji:"🎼🔊🔔", title:"Kling, Glöckchen, klingelingeling", startMs: 12000 },
   { emoji:"😁❤️😂💃🎅🏼", title:"Lasst uns froh und munter sein", startMs: 16000 },
   { emoji:"🔔🔔🔔", title:"Jingle Bells", startMs: 29000 },
   { emoji:"🔴👃🦌", title:"Rudolph the Red-Nosed Reindeer", startMs: 5000 },
@@ -234,14 +201,57 @@ const ANSWER_SECONDS = 45;
 const SOLUTION_SECONDS = 30;
 const ROUND_TOTAL = QUESTIONS.length;
 
-// ============== Utils (ohne DOM-Abhängigkeit) ==============
+// ============== Utils ==============
 const $ = (s)=>document.querySelector(s);
-function rid(len=6){ const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; return Array.from({length:len},()=>c[Math.floor(Math.random()*c.length)]).join(""); }
-function normalize(s){ if(!s) return ""; return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/&/g,"und").replace(/[^a-z0-9äöüß \-]+/g," ").replace(/\b(der|die|das|ein|eine|und|the|a|an|oh|o)\b/g," ").replace(/\s+/g," ").trim(); }
-function lev(a,b){ const m=a.length,n=b.length,dp=Array.from({length:m+1},()=>Array(n+1).fill(0)); for(let i=0;i<=m;i++)dp[i][0]=i; for(let j=0;j<=n;j++)dp[0][j]=j; for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){const cost=a[i-1]===b[j-1]?0:1; dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+cost);} return dp[m][n]; }
-function fuzzyMatch(input,target){ const a=normalize(input), t=normalize(target); if(a===t) return true; const d=lev(a,t); const tol=Math.max(1,Math.min(4,Math.round(t.length*0.25))); return d<=tol; }
-function animateProgress(bar,duration){ return new Promise(resolve=>{ const start=performance.now(); function step(t){ const p=Math.min(1,(t-start)/duration); bar.style.width=(p*100).toFixed(1)+"%"; if(p<1) requestAnimationFrame(step); else { bar.style.width="0%"; resolve(); } } requestAnimationFrame(step); }); }
-
+function rid(len=6){
+  const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({length:len},()=>c[Math.floor(Math.random()*c.length)]).join("");
+}
+function normalize(s){
+  if(!s) return "";
+  return s.toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .replace(/&/g,"und")
+    .replace(/[^a-z0-9äöüß \-]+/g," ")
+    .replace(/\b(der|die|das|ein|eine|und|the|a|an|oh|o)\b/g," ")
+    .replace(/\s+/g," ").trim();
+}
+function lev(a,b){
+  const m=a.length,n=b.length;
+  const dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+  for(let i=0;i<=m;i++) dp[i][0]=i;
+  for(let j=0;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++){
+    for(let j=1;j<=n;j++){
+      const cost=a[i-1]===b[j-1]?0:1;
+      dp[i][j]=Math.min(
+        dp[i-1][j]+1,
+        dp[i][j-1]+1,
+        dp[i-1][j-1]+cost
+      );
+    }
+  }
+  return dp[m][n];
+}
+function fuzzyMatch(input,target){
+  const a=normalize(input), t=normalize(target);
+  if(a===t) return true;
+  const d=lev(a,t);
+  const tol=Math.max(1,Math.min(4,Math.round(t.length*0.25)));
+  return d<=tol;
+}
+function animateProgress(bar,duration){
+  return new Promise(resolve=>{
+    const start=performance.now();
+    function step(t){
+      const p=Math.min(1,(t-start)/duration);
+      bar.style.width=(p*100)+"%";
+      if(p<1) requestAnimationFrame(step);
+      else { bar.style.width="0%"; resolve(); }
+    }
+    requestAnimationFrame(step);
+  });
+}
 // ============== DOM-Referenzen ==============
 const screenHost = $("#screen-host");
 const hostPanel  = $("#hostPanel");
@@ -288,11 +298,10 @@ const screenResult= $("#screen-result");
 const finalBoard  = $("#finalBoard");
 const restartBtn  = $("#restartBtn");
 
-// Zähler setzen
 roundTotalEl.textContent = ROUND_TOTAL;
 roundTotalP.textContent  = ROUND_TOTAL;
 
-// ============== Helpers (brauchen DOM-Refs) ==============
+// Helpers
 function show(el){ el.classList.remove("hidden"); }
 function hide(el){ el.classList.add("hidden"); }
 function goto(elShow){
@@ -306,7 +315,7 @@ function updateShareLink(id){
   shareLinkI.value = url.toString();
 }
 
-// ============== State ==============
+// State
 let gameId = null;
 let myId   = null;
 let myName = null;
@@ -316,20 +325,20 @@ createGameBtn.onclick = async ()=>{
   try{
     const id = rid();
     gameId = id;
+
     await set(ref(db, `games/${id}`), {
       createdAt: Date.now(),
       state: { round: 0, phase: "waiting" },
       players: {}
     });
+
     gameIdHost.textContent = id;
     phaseLabel.textContent = "Warten auf Start";
     updateShareLink(id);
     hostPanel.classList.remove("hidden");
     listenPlayersInLobby();
-    console.log("[game] erstellt:", id);
   }catch(err){
-    console.error("[game] Erstellung fehlgeschlagen:", err);
-    alert("Konnte das Spiel nicht erstellen:\n"+(err?.message||err));
+    alert("Konnte das Spiel nicht erstellen:\n"+err);
   }
 };
 
@@ -339,24 +348,17 @@ joinHostBtn.onclick = async ()=>{
   const snap = await get(ref(db, `games/${id}`));
   if(!snap.exists()) return alert("Spiel nicht gefunden.");
   gameId = id;
+
   gameIdHost.textContent = id;
   updateShareLink(id);
   hostPanel.classList.remove("hidden");
   listenPlayersInLobby();
+
   const s = (await get(ref(db, `games/${id}/state`))).val()||{};
   phaseLabel.textContent = s.phase || "—";
 };
 
-copyLinkBtn.onclick = async ()=>{
-  try{
-    await navigator.clipboard.writeText(shareLinkI.value);
-    copyLinkBtn.textContent="Kopiert!";
-    setTimeout(()=>copyLinkBtn.textContent="Link kopieren",1200);
-  }catch{
-    alert("Konnte den Link nicht kopieren.");
-  }
-};
-
+// Lobby listener
 function listenPlayersInLobby(){
   onValue(ref(db, `games/${gameId}/players`), (snap)=>{
     const players = snap.val() || {};
@@ -370,95 +372,112 @@ function listenPlayersInLobby(){
   });
 }
 
+copyLinkBtn.onclick = async ()=>{
+  await navigator.clipboard.writeText(shareLinkI.value);
+  copyLinkBtn.textContent="Kopiert!";
+  setTimeout(()=>copyLinkBtn.textContent="Link kopieren",1200);
+};
+
+// ============== GAME START ==============
 startGameBtn.onclick = async ()=>{
   try{
     startGameBtn.disabled = true;
-    await update(ref(db, `games/${gameId}/state`), { phase:"question", round:0, ts: Date.now() });
-    phaseLabel.textContent = "Frage";
-    autoRoundLoop().catch(console.error);
+    await update(ref(db, `games/${gameId}/state`), { 
+      phase:"question", 
+      round:0, 
+      ts: Date.now() 
+    });
+
+    autoRoundLoop();
   }catch(err){
-    alert("Konnte das Spiel nicht starten:\n"+(err?.message||err));
+    alert("Fehler beim Start: "+err);
     startGameBtn.disabled = false;
   }
 };
 
-// ============== Rundenablauf (Host) ==============
+// ============== RUNDENABLAUF – FIXED VERSION ==============
 async function autoRoundLoop(){
   for(let r=0; r<ROUND_TOTAL; r++){
-    await update(ref(db, `games/${gameId}/state`), { round:r, phase:"question", ts:Date.now() });
+
+    // ► PHASE 1: FRAGE
+    await update(ref(db, `games/${gameId}/state`), { 
+      round:r, 
+      phase:"question", 
+      ts:Date.now() 
+    });
+
     hostEmoji.textContent = QUESTIONS[r].emoji;
     solutionText.classList.add("hidden");
     phaseLabel.textContent = "Frage";
     roundNowEl.textContent = r+1;
     answerReview.innerHTML = "";
-    await animateProgress(progressBar, ANSWER_SECONDS*1000);
 
+    // Timer
+    await animateProgress(progressBar, ANSWER_SECONDS * 1000);
+
+    // Auto-Bewertung
     await initialAutoScoring(r);
 
-    await update(ref(db, `games/${gameId}/state`), { phase:"solution", ts:Date.now() });
+    // ► PHASE 2: LÖSUNG
+    await update(ref(db, `games/${gameId}/state`), { 
+      phase:"solution", 
+      ts:Date.now() 
+    });
+
     phaseLabel.textContent = "Lösung";
     solutionText.textContent = "Lösung: " + QUESTIONS[r].title;
     solutionText.classList.remove("hidden");
 
-    // >>> HIER: NUR DER HOST RUFT DAS AUF <<<
-async function playSongSnippetForRound(roundIndex) {
-  if (!spotifyToken || !spotifyDeviceId || !spotifyPlayer) {
-    console.warn("[spotify] Player noch nicht bereit – kein Snippet.");
-    return;
+    // SONG-SNIPPET HIER:
+    playSongSnippetForRound(r);
+
+    // Antworten anzeigen
+    await renderAnswersForReview(r);
+    await renderTop5();
+
+    // Weiter-Button
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "btn mt-1";
+    nextBtn.textContent = "Weiter zur nächsten Frage";
+
+    solutionText.insertAdjacentElement("afterend", nextBtn);
+
+    await new Promise(res=> nextBtn.onclick = ()=>{ nextBtn.remove(); res(); });
   }
 
-  // Standard: 30 Sekunden, falls nichts definiert ist
-  const defaultStartMs = 30000;
-  const startMs = QUESTIONS[roundIndex]?.startMs ?? defaultStartMs;
+  // ► PHASE 3: ENDE
+  await update(ref(db, `games/${gameId}/state`), { 
+    phase:"end", 
+    ts:Date.now() 
+  });
 
-  try {
-    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${spotifyToken}`
-      },
-      body: JSON.stringify({
-        context_uri: playlistURI,
-        offset: { position: roundIndex },
-        position_ms: startMs
-      })
-    });
-
-    // nach 20 Sekunden stoppen
-    setTimeout(() => {
-      spotifyPlayer.pause().catch(e => console.warn("[spotify] pause failed:", e));
-    }, 20000);
-  } catch (e) {
-    console.error("[spotify] play failed:", e);
-  }
-}
-
-
-  await update(ref(db, `games/${gameId}/state`), { phase:"end", ts:Date.now() });
   phaseLabel.textContent = "Ende";
   solutionText.textContent = "Frohe Weihnachten!";
+
   await renderTop5();
   await renderFinal();
   goto(screenResult);
 }
-
+// ============== AUTO-SCORING ==============
 async function initialAutoScoring(round){
   const snap = await get(ref(db, `games/${gameId}/players`));
   const players = snap.val() || {};
   const updates = {};
+
   for(const [pid,p] of Object.entries(players)){
     const ans = p.answers?.[round]?.text || "";
     const ok = fuzzyMatch(ans, QUESTIONS[round].title);
     const prevScore = p.score || 0;
-    const alreadyHad = p.answers?.[round]?.correct === true;
-    const add = ok && !alreadyHad ? POINTS : 0;
+    const alreadyCorrect = p.answers?.[round]?.correct === true;
+    const add = ok && !alreadyCorrect ? POINTS : 0;
+
     updates[pid] = {
       name: p.name,
       score: prevScore + add,
       answers: { ...(p.answers||{}), [round]: { text: ans, correct: ok } }
     };
   }
+
   const payload = {};
   for(const [pid,val] of Object.entries(updates)){
     payload[`games/${gameId}/players/${pid}`] = val;
@@ -466,71 +485,99 @@ async function initialAutoScoring(round){
   if(Object.keys(payload).length) await update(ref(db), payload);
 }
 
+// ============== MANUELLE KORREKTUR ==============
 async function renderAnswersForReview(round){
   const snap = await get(ref(db, `games/${gameId}/players`));
   const players = snap.val() || {};
+
   answerReview.innerHTML = "";
 
-  Object.entries(players).forEach(([pid,p])=>{
+  Object.entries(players).forEach(([pid,p]) => {
+
     const ansObj = p.answers?.[round] || { text:"(keine Antwort)", correct:false };
     const ansText = ansObj.text || "(keine Antwort)";
     const correct = !!ansObj.correct;
+
     const row = document.createElement("div");
     row.className = "playerRow";
     row.dataset.pid = pid;
+
     row.innerHTML = `
-      <div><b>${p.name}</b> <span class="tag">Runde ${round+1}</span><br><span class="meta">${ansText}</span></div>
       <div>
-        <button class="btn ghost markBtn" data-value="true"  style="background:${correct?"#16a34a":"#334155"}">✅</button>
-        <button class="btn ghost markBtn" data-value="false" style="background:${!correct?"#dc2626":"#334155"}">❌</button>
+        <b>${p.name}</b> <span class="tag">Runde ${round+1}</span><br>
+        <span class="meta">${ansText}</span>
+      </div>
+      <div>
+        <button class="btn ghost markBtn" data-value="true"
+            style="background:${correct ? "#16a34a" : "#334155"}">✅</button>
+        <button class="btn ghost markBtn" data-value="false"
+            style="background:${!correct ? "#dc2626" : "#334155"}">❌</button>
       </div>`;
+
     answerReview.appendChild(row);
   });
 
+  // Klick-Events
   answerReview.querySelectorAll(".markBtn").forEach(btn=>{
     btn.onclick = ()=>{
       const area = btn.parentElement;
       area.querySelectorAll(".markBtn").forEach(b=>b.style.background="#334155");
-      const val = btn.dataset.value==="true";
+
+      const val = btn.dataset.value === "true";
       btn.style.background = val ? "#16a34a" : "#dc2626";
+
       btn.closest(".playerRow").dataset.mark = val ? "true" : "false";
     };
   });
 
+  // SPEICHERN
   saveManualBtn.onclick = async ()=>{
     const rows = [...answerReview.querySelectorAll(".playerRow")];
     const changes = {};
+
     for(const row of rows){
       const markAttr = row.dataset.mark;
-      if(typeof markAttr === "undefined") continue;
+      if(markAttr === undefined) continue;
+
       const pid = row.dataset.pid;
       const mark = markAttr === "true";
+
       const pSnap = await get(ref(db, `games/${gameId}/players/${pid}`));
       const p = pSnap.val();
+
       const oldCorrect = p.answers?.[round]?.correct || false;
+
       let score = p.score || 0;
       if(mark && !oldCorrect) score += POINTS;
       if(!mark && oldCorrect) score -= POINTS;
+
       changes[`games/${gameId}/players/${pid}/answers/${round}/correct`] = mark;
       changes[`games/${gameId}/players/${pid}/score`] = score;
     }
+
     if(Object.keys(changes).length) await update(ref(db), changes);
-    await update(ref(db, `games/${gameId}/state`), { ts: Date.now() });
-    alert("Korrekturen gespeichert ✅");
+
+    alert("Korrekturen gespeichert ✔️");
+
     await renderTop5();
     await renderAnswersForReview(round);
   };
 }
 
+// ============== TOP 5 & FINAL ==============
 async function renderTop5(){
   const snap = await get(ref(db, `games/${gameId}/players`));
-  const arr = Object.values(snap.val()||{}).map(x=>({name:x.name,score:x.score||0}))
-              .sort((a,b)=>b.score-a.score).slice(0,5);
+  const arr = Object.values(snap.val()||{})
+    .map(p=>({name:p.name,score:p.score||0}))
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,5);
+
   top5El.innerHTML = "";
+
   arr.forEach((p,i)=>{
+    const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"🎄";
     const d=document.createElement("div");
     d.className="playerRow";
-    const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"🎄";
     d.innerHTML = `<div>${medal} <b>${p.name}</b></div><div>${p.score} Punkte</div>`;
     top5El.appendChild(d);
   });
@@ -538,19 +585,24 @@ async function renderTop5(){
 
 async function renderFinal(){
   const snap = await get(ref(db, `games/${gameId}/players`));
-  const arr = Object.values(snap.val()||{}).map(x=>({name:x.name,score:x.score||0}))
-              .sort((a,b)=>b.score-a.score);
+  const arr = Object.values(snap.val()||{})
+    .map(p=>({name:p.name,score:p.score||0}))
+    .sort((a,b)=>b.score-a.score);
+
   finalBoard.innerHTML = "";
+
   arr.forEach((p,i)=>{
+    const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"🎄";
     const d=document.createElement("div");
     d.className="playerRow";
-    const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"🎄";
     d.innerHTML = `<div>${medal} <b>${p.name}</b></div><div>${p.score} Punkte</div>`;
     finalBoard.appendChild(d);
   });
 }
 
-// ============== Player Flow ==============
+// ============== PLAYER-FLOW ==============
+
+// Wenn man mit ?game=ABCD12 als Spieler joinen soll:
 const url = new URL(window.location.href);
 if (url.searchParams.get("game") && url.searchParams.get("role") === "player") {
   goto(screenJoin);
@@ -560,11 +612,20 @@ if (url.searchParams.get("game") && url.searchParams.get("role") === "player") {
 enterBtn.onclick = async ()=>{
   const gid = joinGameIdI.value.trim().toUpperCase();
   const name = playerNameI.value.trim();
+
   if(!gid || !name) return alert("Bitte Spiel-ID und Namen eingeben.");
+
   const snap = await get(ref(db, `games/${gid}`));
   if(!snap.exists()) return alert("Spiel nicht gefunden.");
-  gameId = gid; myName = name; myId = "p_"+Math.random().toString(36).slice(2,10);
-  await set(ref(db, `games/${gameId}/players/${myId}`), { name: myName, score:0, answers:{} });
+
+  gameId = gid;
+  myName = name;
+  myId = "p_"+Math.random().toString(36).slice(2,10);
+
+  await set(ref(db, `games/${gameId}/players/${myId}`), {
+    name: myName, score:0, answers:{}
+  });
+
   gameIdSmall.textContent = gameId;
   goto(screenPlayer);
   listenStateAsPlayer();
@@ -573,34 +634,58 @@ enterBtn.onclick = async ()=>{
 function listenStateAsPlayer(){
   onValue(ref(db, `games/${gameId}/state`), async (snap)=>{
     const s = snap.val() || {phase:"waiting",round:0};
+
     roundNowP.textContent = (s.round||0)+1;
 
     if(s.phase==="waiting"){
-      show(waitBox); hide(questionBox); hide(solutionBox);
+      show(waitBox);
+      hide(questionBox);
+      hide(solutionBox);
+    }
 
-    }else if(s.phase==="question"){
-      const r = s.round || 0;
-      emojiEl.textContent = QUESTIONS[r]?.emoji || "🎵";
-      ansI.value = ""; savedMsg.classList.add("hidden");
-      show(questionBox); hide(waitBox); hide(solutionBox);
+    else if(s.phase==="question"){
+      const r = s.round;
+
+      emojiEl.textContent = QUESTIONS[r].emoji;
+      ansI.value = "";
+      savedMsg.classList.add("hidden");
+
+      show(questionBox);
+      hide(waitBox);
+      hide(solutionBox);
+
       const remaining = Math.max(0, ANSWER_SECONDS*1000 - (Date.now()-s.ts));
       animateProgress(progressBarP, remaining);
+    }
 
-    }else if(s.phase==="solution"){
-      const r = s.round || 0;
+    else if(s.phase==="solution"){
+      const r = s.round;
+
       const aSnap = await get(ref(db, `games/${gameId}/players/${myId}/answers/${r}`));
       const ans = aSnap.val();
-      const ok = ans && typeof ans.correct !== "undefined" ? ans.correct : fuzzyMatch(ans?.text||"", QUESTIONS[r].title);
+      const ok = ans
+        ? ans.correct
+        : fuzzyMatch(ans?.text || "", QUESTIONS[r].title);
+
       resultIcon.textContent = ok ? "✅" : "❌";
       resultText.textContent = ok ? "Richtig!" : "Leider falsch!";
-      resultText.className = ok ? "big correct" : "big wrong";
-      solutionTextP.textContent = "Lösung: " + (QUESTIONS[r]?.title || "");
-      show(solutionBox); hide(questionBox); hide(waitBox);
+      resultText.className  = ok ? "big correct" : "big wrong";
+
+      solutionTextP.textContent = "Lösung: " + QUESTIONS[r].title;
+
+      show(solutionBox);
+      hide(questionBox);
+      hide(waitBox);
+
       const remaining = Math.max(0, SOLUTION_SECONDS*1000 - (Date.now()-s.ts));
       animateProgress(progressBarP, remaining);
+    }
 
-    }else if(s.phase==="end"){
-      hide(questionBox); hide(waitBox); show(solutionBox);
+    else if(s.phase==="end"){
+      hide(questionBox);
+      hide(waitBox);
+      show(solutionBox);
+
       resultIcon.textContent = "🎉";
       resultText.className = "big";
       resultText.textContent = "Danke fürs Mitspielen!";
@@ -609,19 +694,24 @@ function listenStateAsPlayer(){
   });
 }
 
+// Antwort abschicken
 submitBtn.onclick = async ()=>{
   const s = await get(ref(db, `games/${gameId}/state`));
-  const st = s.val() || {};
-  if(st.phase!=="question") return;
-  const r = st.round || 0;
+  if(s.val()?.phase !== "question") return;
+
+  const r = s.val().round;
   const text = ansI.value.trim();
   if(!text) return;
-  await update(ref(db, `games/${gameId}/players/${myId}/answers`), { [r]: { text } });
+
+  await update(ref(db, `games/${gameId}/players/${myId}/answers`), {
+    [r]: { text }
+  });
+
   savedMsg.classList.remove("hidden");
   ansI.value = "";
 };
 
-// ============== DOMContentLoaded: Spotify + Button verbinden ==============
+// ============== DOMContentLoaded – Spotify aktivieren ==============
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("spotifyLoginBtn");
   if (btn) btn.onclick = loginSpotify;
@@ -629,4 +719,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ============== Restart ==============
-restartBtn.onclick = ()=>{ location.href = location.origin + location.pathname; };
+restartBtn.onclick = ()=>{
+  location.href = location.origin + location.pathname;
+};
