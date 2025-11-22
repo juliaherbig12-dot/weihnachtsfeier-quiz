@@ -402,15 +402,15 @@ startGameBtn.onclick = async ()=>{
   }
 };
 
-// ============== RUNDENABLAUF – FIXED VERSION ==============
+// ============== RUNDENABLAUF ==============
 async function autoRoundLoop() {
   for (let r = 0; r < ROUND_TOTAL; r++) {
 
     // ► PHASE 1: FRAGE
     await update(ref(db, `games/${gameId}/state`), { 
-      round: r, 
-      phase: "question", 
-      ts: Date.now() 
+      round: r,
+      phase: "question",
+      ts: Date.now()
     });
 
     hostEmoji.textContent = QUESTIONS[r].emoji;
@@ -419,48 +419,52 @@ async function autoRoundLoop() {
     roundNowEl.textContent = r + 1;
     answerReview.innerHTML = "";
 
-    // direkt zur Frage den Song starten
-    playSongSnippetForRound(r);
-
-    // Timer für die Antwortzeit
+    // Antwort-Timer
     await animateProgress(progressBar, ANSWER_SECONDS * 1000);
 
-    // Auto-Bewertung nach Ablauf der Zeit
+    // automatische Bewertung
     await initialAutoScoring(r);
 
+
     // ► PHASE 2: LÖSUNG
-    await update(ref(db, `games/${gameId}/state`), { 
-      phase: "solution", 
-      ts: Date.now() 
+    await update(ref(db, `games/${gameId}/state`), {
+      phase: "solution",
+      ts: Date.now()
     });
 
     phaseLabel.textContent = "Lösung";
     solutionText.textContent = "Lösung: " + QUESTIONS[r].title;
     solutionText.classList.remove("hidden");
 
-    // Antworten anzeigen + Top 5
+    // >>> HIER wird das Lied abgespielt (NICHT davor!)
+    playSongSnippetForRound(r);
+
+    // Antworten + Top 5
     await renderAnswersForReview(r);
     await renderTop5();
+
 
     // Weiter-Button
     const nextBtn = document.createElement("button");
     nextBtn.textContent = "Weiter zur nächsten Frage";
     nextBtn.className = "btn mt-1";
     solutionText.insertAdjacentElement("afterend", nextBtn);
-    
+
     await new Promise(res => {
       nextBtn.onclick = () => {
-        stopSnippetImmediately();   // Musik sofort stoppen
+        stopSnippetImmediately(); // Musik sofort stoppen
         nextBtn.remove();
         res();
       };
     });
-  }
 
-  // ► PHASE 3: ENDE (nach allen Runden)
-  await update(ref(db, `games/${gameId}/state`), { 
-    phase: "end", 
-    ts: Date.now() 
+  } // Ende der Runden-Schleife
+
+
+  // ► PHASE 3: SPIEL ENDE
+  await update(ref(db, `games/${gameId}/state`), {
+    phase: "end",
+    ts: Date.now()
   });
 
   phaseLabel.textContent = "Ende";
