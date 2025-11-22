@@ -17,16 +17,14 @@ const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
 // ============== Spotify PKCE + Player (über Vercel) ==============
-
 const clientId     = "5d0dd83f585a4ad3b9c28d86185df6a6";
 const redirectUri  = "https://weihnachtsfeier-quiz.vercel.app"; 
 const playlistURI  = "spotify:playlist:5YUM8W5TlJeqTvbb07Wsk2";
 const tokenEndpoint = "/api/spotify-token";
 
-let spotifyToken   = null;
+let spotifyToken    = null;
 let spotifyDeviceId = null;
-let spotifyPlayer  = null;
-let currentQuestionIndex = 0;
+let spotifyPlayer   = null;
 
 // --- Sofort Musik stoppen (für "Weiter zur nächsten Frage") ---
 function stopSnippetImmediately() {
@@ -135,7 +133,8 @@ async function createSpotifyPlayer() {
 
   spotifyPlayer.connect();
 }
-// ---------- Song-Snippet abspielen (Host Only) ----------
+
+// ---------- Song-Snippet abspielen (Host Only, in Lösungsphase) ----------
 async function playSongSnippetForRound(roundIndex) {
   if (!spotifyToken || !spotifyDeviceId || !spotifyPlayer) {
     console.warn("[spotify] Player nicht bereit.");
@@ -144,6 +143,9 @@ async function playSongSnippetForRound(roundIndex) {
 
   const defaultStartMs = 30000;
   const startMs = QUESTIONS[roundIndex]?.startMs ?? defaultStartMs;
+
+  // Wie lange soll das Lied laufen? (z.B. 30000 = 30s)
+  const SNIPPET_DURATION_MS = 20000;
 
   try {
     await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
@@ -161,7 +163,7 @@ async function playSongSnippetForRound(roundIndex) {
 
     setTimeout(() => {
       spotifyPlayer.pause().catch(e => console.warn("[spotify] pause failed:", e));
-    }, 20000);
+    }, SNIPPET_DURATION_MS);
 
   } catch (err) {
     console.error("[spotify] play failed:", err);
@@ -210,10 +212,12 @@ const ROUND_TOTAL = QUESTIONS.length;
 
 // ============== Utils ==============
 const $ = (s)=>document.querySelector(s);
+
 function rid(len=6){
   const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({length:len},()=>c[Math.floor(Math.random()*c.length)]).join("");
 }
+
 function normalize(s){
   if(!s) return "";
   return s.toLowerCase().normalize("NFD")
@@ -223,6 +227,7 @@ function normalize(s){
     .replace(/\b(der|die|das|ein|eine|und|the|a|an|oh|o)\b/g," ")
     .replace(/\s+/g," ").trim();
 }
+
 function lev(a,b){
   const m=a.length,n=b.length;
   const dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
@@ -240,6 +245,7 @@ function lev(a,b){
   }
   return dp[m][n];
 }
+
 function fuzzyMatch(input,target){
   const a=normalize(input), t=normalize(target);
   if(a===t) return true;
@@ -247,6 +253,7 @@ function fuzzyMatch(input,target){
   const tol=Math.max(1,Math.min(4,Math.round(t.length*0.25)));
   return d<=tol;
 }
+
 function animateProgress(bar,duration){
   return new Promise(resolve=>{
     const start=performance.now();
@@ -259,6 +266,7 @@ function animateProgress(bar,duration){
     requestAnimationFrame(step);
   });
 }
+
 // ============== DOM-Referenzen ==============
 const screenHost = $("#screen-host");
 const hostPanel  = $("#hostPanel");
@@ -365,7 +373,6 @@ joinHostBtn.onclick = async ()=>{
   phaseLabel.textContent = s.phase || "—";
 };
 
-// Lobby listener
 function listenPlayersInLobby(){
   onValue(ref(db, `games/${gameId}/players`), (snap)=>{
     const players = snap.val() || {};
@@ -425,7 +432,6 @@ async function autoRoundLoop() {
     // automatische Bewertung
     await initialAutoScoring(r);
 
-
     // ► PHASE 2: LÖSUNG
     await update(ref(db, `games/${gameId}/state`), {
       phase: "solution",
@@ -436,13 +442,12 @@ async function autoRoundLoop() {
     solutionText.textContent = "Lösung: " + QUESTIONS[r].title;
     solutionText.classList.remove("hidden");
 
-    // >>> HIER wird das Lied abgespielt (NICHT davor!)
+    // Lied abspielen (nur in der Lösung)
     playSongSnippetForRound(r);
 
     // Antworten + Top 5
     await renderAnswersForReview(r);
     await renderTop5();
-
 
     // Weiter-Button
     const nextBtn = document.createElement("button");
@@ -457,9 +462,7 @@ async function autoRoundLoop() {
         res();
       };
     });
-
-  } // Ende der Runden-Schleife
-
+  }
 
   // ► PHASE 3: SPIEL ENDE
   await update(ref(db, `games/${gameId}/state`), {
@@ -510,7 +513,6 @@ async function renderAnswersForReview(round){
   answerReview.innerHTML = "";
 
   Object.entries(players).forEach(([pid,p]) => {
-
     const ansObj = p.answers?.[round] || { text:"(keine Antwort)", correct:false };
     const ansText = ansObj.text || "(keine Antwort)";
     const correct = !!ansObj.correct;
@@ -547,14 +549,14 @@ async function renderAnswersForReview(round){
     };
   });
 
-  // SPEICHERN
+  // Korrektur speichern
   saveManualBtn.onclick = async ()=>{
     const rows = [...answerReview.querySelectorAll(".playerRow")];
     const changes = {};
 
-    for(const row of rows){
+    for (const row of rows) {
       const markAttr = row.dataset.mark;
-      if(markAttr === undefined) continue;
+      if (markAttr === undefined) continue;
 
       const pid = row.dataset.pid;
       const mark = markAttr === "true";
@@ -563,19 +565,22 @@ async function renderAnswersForReview(round){
       const p = pSnap.val();
 
       const oldCorrect = p.answers?.[round]?.correct || false;
-
       let score = p.score || 0;
-      if(mark && !oldCorrect) score += POINTS;
-      if(!mark && oldCorrect) score -= POINTS;
+
+      if (mark && !oldCorrect) score += POINTS;
+      if (!mark && oldCorrect) score -= POINTS;
 
       changes[`games/${gameId}/players/${pid}/answers/${round}/correct`] = mark;
       changes[`games/${gameId}/players/${pid}/score`] = score;
     }
 
-    if(Object.keys(changes).length) await update(ref(db), changes);
+    if (Object.keys(changes).length) {
+      await update(ref(db), changes);
+      // Spieler neu triggern, damit sie aktualisierte Lösung sehen
+      await update(ref(db, `games/${gameId}/state`), { ts: Date.now() });
+    }
 
     alert("Korrekturen gespeichert ✔️");
-
     await renderTop5();
     await renderAnswersForReview(round);
   };
@@ -618,8 +623,6 @@ async function renderFinal(){
 }
 
 // ============== PLAYER-FLOW ==============
-
-// Wenn man mit ?game=ABCD12 als Spieler joinen soll:
 const url = new URL(window.location.href);
 if (url.searchParams.get("game") && url.searchParams.get("role") === "player") {
   goto(screenJoin);
@@ -662,7 +665,6 @@ function listenStateAsPlayer(){
 
     else if(s.phase==="question"){
       const r = s.round;
-
       emojiEl.textContent = QUESTIONS[r].emoji;
       ansI.value = "";
       savedMsg.classList.add("hidden");
@@ -698,15 +700,36 @@ function listenStateAsPlayer(){
       animateProgress(progressBarP, remaining);
     }
 
-    else if(s.phase==="end"){
+    else if (s.phase === "end") {
       hide(questionBox);
       hide(waitBox);
       show(solutionBox);
 
+      // Ranking berechnen
+      const snapPlayers = await get(ref(db, `games/${gameId}/players`));
+      const players = snapPlayers.val() || {};
+
+      const arr = Object.entries(players).map(([pid, p]) => ({
+        id: pid,
+        name: p.name,
+        score: p.score || 0
+      })).sort((a, b) => b.score - a.score);
+
+      const total = arr.length;
+      const myIndex = arr.findIndex(p => p.id === myId);
+      const myPlace = myIndex >= 0 ? myIndex + 1 : null;
+      const myScore = (players[myId] && players[myId].score) || 0;
+
       resultIcon.textContent = "🎉";
       resultText.className = "big";
-      resultText.textContent = "Danke fürs Mitspielen!";
-      solutionTextP.textContent = "";
+
+      if (myPlace !== null) {
+        resultText.textContent = `Du bist Platz ${myPlace} von ${total}!`;
+        solutionTextP.textContent = `Deine Punktzahl: ${myScore} Punkte`;
+      } else {
+        resultText.textContent = "Danke fürs Mitspielen!";
+        solutionTextP.textContent = "";
+      }
     }
   });
 }
