@@ -403,42 +403,42 @@ startGameBtn.onclick = async ()=>{
 };
 
 // ============== RUNDENABLAUF – FIXED VERSION ==============
-async function autoRoundLoop(){
-  for(let r=0; r<ROUND_TOTAL; r++){
+async function autoRoundLoop() {
+  for (let r = 0; r < ROUND_TOTAL; r++) {
 
     // ► PHASE 1: FRAGE
     await update(ref(db, `games/${gameId}/state`), { 
-      round:r, 
-      phase:"question", 
-      ts:Date.now() 
+      round: r, 
+      phase: "question", 
+      ts: Date.now() 
     });
 
     hostEmoji.textContent = QUESTIONS[r].emoji;
     solutionText.classList.add("hidden");
     phaseLabel.textContent = "Frage";
-    roundNowEl.textContent = r+1;
+    roundNowEl.textContent = r + 1;
     answerReview.innerHTML = "";
 
-    // Timer
+    // direkt zur Frage den Song starten
+    playSongSnippetForRound(r);
+
+    // Timer für die Antwortzeit
     await animateProgress(progressBar, ANSWER_SECONDS * 1000);
 
-    // Auto-Bewertung
+    // Auto-Bewertung nach Ablauf der Zeit
     await initialAutoScoring(r);
 
     // ► PHASE 2: LÖSUNG
     await update(ref(db, `games/${gameId}/state`), { 
-      phase:"solution", 
-      ts:Date.now() 
+      phase: "solution", 
+      ts: Date.now() 
     });
 
     phaseLabel.textContent = "Lösung";
     solutionText.textContent = "Lösung: " + QUESTIONS[r].title;
     solutionText.classList.remove("hidden");
 
-    // SONG-SNIPPET HIER:
-    playSongSnippetForRound(r);
-
-    // Antworten anzeigen
+    // Antworten anzeigen + Top 5
     await renderAnswersForReview(r);
     await renderTop5();
 
@@ -450,15 +450,17 @@ async function autoRoundLoop(){
     
     await new Promise(res => {
       nextBtn.onclick = () => {
-        stopSnippetImmediately();   // <<< HIER STOPPEN
+        stopSnippetImmediately();   // Musik sofort stoppen
         nextBtn.remove();
         res();
       };
     });
-  // ► PHASE 3: ENDE
+  }
+
+  // ► PHASE 3: ENDE (nach allen Runden)
   await update(ref(db, `games/${gameId}/state`), { 
-    phase:"end", 
-    ts:Date.now() 
+    phase: "end", 
+    ts: Date.now() 
   });
 
   phaseLabel.textContent = "Ende";
@@ -468,6 +470,7 @@ async function autoRoundLoop(){
   await renderFinal();
   goto(screenResult);
 }
+
 // ============== AUTO-SCORING ==============
 async function initialAutoScoring(round){
   const snap = await get(ref(db, `games/${gameId}/players`));
