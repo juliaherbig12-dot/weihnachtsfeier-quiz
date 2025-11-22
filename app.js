@@ -213,20 +213,20 @@ async function handleSpotifyRedirect() {
 
 // ============== Quiz-Daten ==============
 const QUESTIONS = [
-  { emoji:"🤫🌌😇🌌", title:"Stille Nacht, heilige Nacht" },
-  { emoji:"🎄🌿", title:"O Tannenbaum" },
-  { emoji:"🤫🌨️❄️", title:"Leise rieselt der Schnee" },
-  { emoji:"🗓️🔁", title:"Alle Jahre wieder" },
-  { emoji:"😲🫵😁", title:"O du fröhliche" },
-  { emoji:"🎼🔊🔔", title:"Kling, Glöckchen, klingelingeling" },
-  { emoji:"😁❤️😂💃🎅🏼", title:"Lasst uns froh und munter sein" },
-  { emoji:"🔔🔔🔔", title:"Jingle Bells" },
-  { emoji:"🔴👃🦌", title:"Rudolph the Red-Nosed Reindeer" },
-  { emoji:"🎄🔙🤲🫵❤️", title:"Last Christmas" },
-  { emoji:"📝1️⃣🎁🫵", title:"All I Want for Christmas Is You" },
-  { emoji:"😲👶👐", title:"Oh, Kinderlein kommet" },
-  { emoji:"👥🗣️😁🎄😂🆕🗓️", title:"We Wish You a Merry Christmas" },
-  { emoji:"🔜👶❓🎁🔜😁", title:"Morgen, Kinder, wird’s was geben" }
+  { emoji:"🤫🌌😇🌌", title:"Stille Nacht, heilige Nacht", startMs: 15000 }, // ab 15s
+  { emoji:"🎄🌿", title:"O Tannenbaum", startMs: 14000 },
+  { emoji:"🤫🌨️❄️", title:"Leise rieselt der Schnee", startMs: 16000 },
+  { emoji:"🗓️🔁", title:"Alle Jahre wieder", startMs: 9000 },
+  { emoji:"😲🫵😁", title:"O du fröhliche", startMs: 8000 },
+  { emoji:"🎼🔊🔔", title:"Kling, Glöckchen, klingelingeling" , startMs: 12000 },
+  { emoji:"😁❤️😂💃🎅🏼", title:"Lasst uns froh und munter sein", startMs: 16000 },
+  { emoji:"🔔🔔🔔", title:"Jingle Bells", startMs: 29000 },
+  { emoji:"🔴👃🦌", title:"Rudolph the Red-Nosed Reindeer", startMs: 5000 },
+  { emoji:"🎄🔙🤲🫵❤️", title:"Last Christmas", startMs: 17000 },
+  { emoji:"📝1️⃣🎁🫵", title:"All I Want for Christmas Is You", startMs: 85000 },
+  { emoji:"😲👶👐", title:"Oh, Kinderlein kommet", startMs: 15000 },
+  { emoji:"👥🗣️😁🎄😂🆕🗓️", title:"We Wish You a Merry Christmas", startMs: 6000 },
+  { emoji:"🔜👶❓🎁🔜😁", title:"Morgen, Kinder, wird’s was geben", startMs: 7000 }
 ];
 
 const POINTS = 125;
@@ -401,17 +401,39 @@ async function autoRoundLoop(){
     solutionText.classList.remove("hidden");
 
     // >>> HIER: NUR DER HOST RUFT DAS AUF <<<
-    playSongSnippetForRound(r);
-
-    await renderAnswersForReview(r);
-    await renderTop5();
-
-    const nextBtn = document.createElement("button");
-    nextBtn.textContent = "Weiter zur nächsten Frage";
-    nextBtn.className = "btn mt-1";
-    solutionText.insertAdjacentElement("afterend", nextBtn);
-    await new Promise(res=>{ nextBtn.onclick = ()=>{ nextBtn.remove(); res(); }; });
+async function playSongSnippetForRound(roundIndex) {
+  if (!spotifyToken || !spotifyDeviceId || !spotifyPlayer) {
+    console.warn("[spotify] Player noch nicht bereit – kein Snippet.");
+    return;
   }
+
+  // Standard: 30 Sekunden, falls nichts definiert ist
+  const defaultStartMs = 30000;
+  const startMs = QUESTIONS[roundIndex]?.startMs ?? defaultStartMs;
+
+  try {
+    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${spotifyToken}`
+      },
+      body: JSON.stringify({
+        context_uri: playlistURI,
+        offset: { position: roundIndex },
+        position_ms: startMs
+      })
+    });
+
+    // nach 20 Sekunden stoppen
+    setTimeout(() => {
+      spotifyPlayer.pause().catch(e => console.warn("[spotify] pause failed:", e));
+    }, 20000);
+  } catch (e) {
+    console.error("[spotify] play failed:", e);
+  }
+}
+
 
   await update(ref(db, `games/${gameId}/state`), { phase:"end", ts:Date.now() });
   phaseLabel.textContent = "Ende";
