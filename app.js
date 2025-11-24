@@ -145,7 +145,7 @@ async function playSongSnippetForRound(roundIndex) {
   const startMs = QUESTIONS[roundIndex]?.startMs ?? defaultStartMs;
 
   // Wie lange soll das Lied laufen? (z.B. 30000 = 30s)
-  const SNIPPET_DURATION_MS = 20000;
+  const SNIPPET_DURATION_MS = 60000;
 
   try {
     await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`, {
