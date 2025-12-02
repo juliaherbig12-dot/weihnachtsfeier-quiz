@@ -323,11 +323,23 @@ function goto(elShow){
   [screenHost,screenJoin,screenPlayer,screenResult].forEach(el=>el.classList.add("hidden"));
   elShow.classList.remove("hidden");
 }
+
 function updateShareLink(id){
   const url = new URL(window.location.href);
   url.searchParams.set("game", id);
   url.searchParams.set("role", "player");
-  shareLinkI.value = url.toString();
+  shareLinkI.value = url.toString()
+  // 3) QR-Code erzeugen
+  const qr = document.getElementById("qrcode");
+  qr.innerHTML = "";
+  new QRCode(qr, {
+    text: joinUrl,
+    width: 160,
+    height: 160,
+    colorDark: "#ffffff",
+    colorLight: "#0b1429",
+    correctLevel: QRCode.CorrectLevel.H
+  });
 }
 
 // State
