@@ -42,6 +42,11 @@
     font-size:clamp(14px,2.6vw,16px); outline:none
   }
   
+.qr {
+  margin: 20px auto;
+  text-align: center;
+}
+
   
   .btn{
     background:var(--red); color:#fff; border:none; border-radius:12px;
