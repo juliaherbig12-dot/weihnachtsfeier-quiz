@@ -33,7 +33,7 @@
   .lead{color:var(--muted); font-size:clamp(14px,2.4vw,16px)}
   
   .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-  .between{ justify-content:space-between; }      /* ersetzte inline-Styles */
+  .between{ justify-content:center; }      /* ersetzte inline-Styles */
   .mt-1{ margin-top:1rem; }                       /* ersetzte inline-Styles */
   
   .input{
