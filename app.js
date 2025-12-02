@@ -636,10 +636,18 @@ async function renderFinal(){
 
 // ============== PLAYER-FLOW ==============
 const url = new URL(window.location.href);
+
+// Spieler kommt über QR-Code (kein Autocomplete mit ID!)
+if (url.searchParams.has("join")) {
+  goto(screenJoin);
+}
+
+// Spieler kommt über alten Direktlink (falls es den noch geben soll)
 if (url.searchParams.get("game") && url.searchParams.get("role") === "player") {
   goto(screenJoin);
   joinGameIdI.value = url.searchParams.get("game").toUpperCase();
 }
+
 
 enterBtn.onclick = async ()=>{
   const gid = joinGameIdI.value.trim().toUpperCase();
