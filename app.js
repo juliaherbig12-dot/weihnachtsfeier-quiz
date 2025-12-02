@@ -325,11 +325,13 @@ function goto(elShow){
 }
 
 function updateShareLink(id){
-  const url = new URL(window.location.href);
-  url.searchParams.set("game", id);
-  url.searchParams.set("role", "player");
-  shareLinkI.value = url.toString()
-  // 3) QR-Code erzeugen
+  // URL für QR-Code – ohne Spiel-ID
+  const joinUrl = location.origin + "/?join";
+
+  // Sichtbarer Text: keine ID anzeigen
+  shareLinkI.value = "QR-Code scannen, dann Spiel-ID eingeben";
+
+  // QR-Code erzeugen
   const qr = document.getElementById("qrcode");
   qr.innerHTML = "";
   new QRCode(qr, {
@@ -341,6 +343,7 @@ function updateShareLink(id){
     correctLevel: QRCode.CorrectLevel.H
   });
 }
+
 
 // State
 let gameId = null;
