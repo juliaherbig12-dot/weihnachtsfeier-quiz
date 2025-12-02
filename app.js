@@ -276,8 +276,6 @@ function goto(elShow){
 function updateShareLink(id) {
   const joinUrl = location.origin + "/?join";
 
-  shareLinkI.value = "QR scannen → Spiel-ID manuell eingeben";
-
   const qr = document.getElementById("qrcode");
   qr.innerHTML = "";
 
@@ -351,13 +349,6 @@ function listenPlayersInLobby(){
     });
   });
 }
-
-// Kopieren
-copyLinkBtn.onclick = async ()=>{
-  await navigator.clipboard.writeText(shareLinkI.value);
-  copyLinkBtn.textContent="Kopiert!";
-  setTimeout(()=>copyLinkBtn.textContent="Link kopieren",1200);
-};
 
 // ============== SPIEL STARTEN ==============
 startGameBtn.onclick = async ()=>{
