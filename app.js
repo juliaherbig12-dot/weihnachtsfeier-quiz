@@ -215,5 +215,555 @@ function animateProgress(bar, duration){
     requestAnimationFrame(step);
   });
 }
+// ============== DOM-Referenzen ==============
+const screenHost = $("#screen-host");
+const hostPanel  = $("#hostPanel");
+const createGameBtn = $("#createGameBtn");
+const joinGameIdHost = $("#joinGameIdHost");
+const joinHostBtn = $("#joinHostBtn");
+const gameIdHost  = $("#gameIdHost");
+const phaseLabel  = $("#phaseLabel");
+const shareLinkI  = $("#shareLink");
+const copyLinkBtn = $("#copyLinkBtn");
+const roundNowEl  = $("#roundNow");
+const roundTotalEl= $("#roundTotal");
+const progressBar = $("#progressBar");
+const hostEmoji   = $("#hostEmoji");
+const solutionText= $("#solutionText");
+const top5El      = $("#top5");
+const playerList  = $("#playerList");
+const startGameBtn= $("#startGameBtn");
+const answerReview= $("#answerReview");
+const saveManualBtn = $("#saveManualBtn");
 
+const screenJoin  = $("#screen-join");
+const joinGameIdI = $("#joinGameId");
+const playerNameI = $("#playerName");
+const enterBtn    = $("#enterBtn");
+
+const screenPlayer= $("#screen-player");
+const gameIdSmall = $("#gameIdSmall");
+const roundNowP   = $("#roundNowP");
+const roundTotalP = $("#roundTotalP");
+const waitBox     = $("#waitBox");
+const questionBox = $("#questionBox");
+const solutionBox = $("#solutionBox");
+const emojiEl     = $("#emoji");
+const progressBarP= $("#progressBarP");
+const ansI        = $("#answer");
+const submitBtn   = $("#submitBtn");
+const savedMsg    = $("#savedMsg");
+const resultIcon  = $("#resultIcon");
+const resultText  = $("#resultText");
+const solutionTextP = $("#solutionTextP");
+
+const screenResult= $("#screen-result");
+const finalBoard  = $("#finalBoard");
+const restartBtn  = $("#restartBtn");
+
+roundTotalP.textContent = QUESTIONS.length;
+roundTotalEl.textContent = QUESTIONS.length;
+
+// Helpers
+function show(el){ el.classList.remove("hidden"); }
+function hide(el){ el.classList.add("hidden"); }
+function goto(elShow){
+  [screenHost,screenJoin,screenPlayer,screenResult].forEach(el=>el.classList.add("hidden"));
+  elShow.classList.remove("hidden");
+}
+
+// ============== QR-CODE (Nur Join, NIEMALS ID!) ==============
+function updateShareLink(id) {
+  const joinUrl = location.origin + "/?join";
+
+  shareLinkI.value = "QR scannen → Spiel-ID manuell eingeben";
+
+  const qr = document.getElementById("qrcode");
+  qr.innerHTML = "";
+
+  new QRCode(qr, {
+    text: joinUrl,
+    width: 160,
+    height: 160,
+    colorDark: "#ffffff",
+    colorLight: "#0b1429",
+    correctLevel: QRCode.CorrectLevel.H
+  });
+}
+
+// State
+let gameId = null;
+let myId   = null;
+let myName = null;
+
+// ============== HOST: SPIEL ERSTELLEN ==============
+createGameBtn.onclick = async ()=>{
+  try{
+    const id = rid();
+    gameId = id;
+
+    await set(ref(db, `games/${id}`), {
+      createdAt: Date.now(),
+      state: { round: 0, phase: "waiting" },
+      players: {}
+    });
+
+    gameIdHost.textContent = id;
+    phaseLabel.textContent = "Warten …";
+    updateShareLink(id);
+    show(hostPanel);
+    listenPlayersInLobby();
+
+  }catch(err){
+    alert("Fehler: "+err);
+  }
+};
+
+// HOST tritt einem existierenden Spiel bei
+joinHostBtn.onclick = async ()=>{
+  const id = joinGameIdHost.value.trim().toUpperCase();
+  if(!id) return alert("Spiel-ID eingeben!");
+
+  const snap = await get(ref(db, `games/${id}`));
+  if(!snap.exists()) return alert("Spiel nicht gefunden.");
+
+  gameId = id;
+  gameIdHost.textContent = id;
+  updateShareLink(id);
+  show(hostPanel);
+
+  listenPlayersInLobby();
+
+  const s = (await get(ref(db, `games/${id}/state`))).val();
+  phaseLabel.textContent = s?.phase || "-";
+};
+
+// ============== LOBBY: Spieler anzeigen ==============
+function listenPlayersInLobby(){
+  onValue(ref(db, `games/${gameId}/players`), snap=>{
+    const players = snap.val() || {};
+    playerList.innerHTML = "";
+    Object.values(players).forEach(p=>{
+      const d=document.createElement("div");
+      d.className="playerRow";
+      d.innerHTML=`<b>${p.name}</b> <span class="meta">${p.score||0} Punkte</span>`;
+      playerList.appendChild(d);
+    });
+  });
+}
+
+// Kopieren
+copyLinkBtn.onclick = async ()=>{
+  await navigator.clipboard.writeText(shareLinkI.value);
+  copyLinkBtn.textContent="Kopiert!";
+  setTimeout(()=>copyLinkBtn.textContent="Link kopieren",1200);
+};
+
+// ============== SPIEL STARTEN ==============
+startGameBtn.onclick = async ()=>{
+  try{
+    startGameBtn.disabled = true;
+
+    await update(ref(db, `games/${gameId}/state`), {
+      phase:"question",
+      round:0,
+      ts: Date.now()
+    });
+
+    autoRoundLoop();
+
+  }catch(err){
+    alert("Fehler: "+err);
+    startGameBtn.disabled=false;
+  }
+};
+
+// ============== RUNDE-FLOW ==============
+async function autoRoundLoop() {
+
+  for (let r = 0; r < QUESTIONS.length; r++) {
+
+    // ► PHASE: FRAGE
+    await update(ref(db, `games/${gameId}/state`), {
+      round:r,
+      phase:"question",
+      ts:Date.now()
+    });
+
+    hostEmoji.textContent = QUESTIONS[r].emoji;
+    solutionText.classList.add("hidden");
+    phaseLabel.textContent = "Frage";
+    roundNowEl.textContent = r+1;
+    answerReview.innerHTML = "";
+
+    await animateProgress(progressBar, ANSWER_SECONDS*1000);
+
+    await initialAutoScoring(r);
+
+    // ► PHASE: LÖSUNG
+    await update(ref(db, `games/${gameId}/state`), {
+      phase:"solution",
+      ts:Date.now()
+    });
+
+    solutionText.textContent = "Lösung: " + QUESTIONS[r].title;
+    solutionText.classList.remove("hidden");
+    phaseLabel.textContent = "Lösung";
+
+    playSongSnippetForRound(r);
+
+    await renderTop5();
+    await renderAnswersForReview(r);
+
+    // Weiter zur nächsten Frage
+    const btn = document.createElement("button");
+    btn.textContent="Weiter";
+    btn.className="btn mt-1";
+    solutionText.insertAdjacentElement("afterend", btn);
+
+    await new Promise(res=>{
+      btn.onclick = ()=>{ stopSnippetImmediately(); btn.remove(); res(); };
+    });
+  }
+
+  // ========== PHASE: ENDE ==========
+  await update(ref(db, `games/${gameId}/state`), {
+    phase:"end",
+    ts:Date.now()
+  });
+
+  phaseLabel.textContent = "Ende";
+  solutionText.textContent = "Frohe Weihnachten!";
+
+  await renderTop5();
+  await renderFinal();
+  goto(screenResult);
+}
+
+// ============== AUTOMATISCHE BEWERTUNG ==============
+async function initialAutoScoring(round){
+  const snap = await get(ref(db, `games/${gameId}/players`));
+  const players = snap.val() || {};
+
+  const result = {};
+
+  for(const [pid,p] of Object.entries(players)){
+    const ans = p.answers?.[round]?.text || "";
+    const ok  = fuzzyMatch(ans, QUESTIONS[round].title);
+
+    const already = p.answers?.[round]?.correct === true;
+    const points = ok && !already ? POINTS : 0;
+
+    result[pid] = {
+      name: p.name,
+      score: (p.score||0) + points,
+      answers: {
+        ...(p.answers||{}),
+        [round]: { text: ans, correct: ok }
+      }
+    };
+  }
+
+  const updates = {};
+  for(const [pid,p] of Object.entries(result)){
+    updates[`games/${gameId}/players/${pid}`] = p;
+  }
+  await update(ref(db), updates);
+}
+
+// ============== MANUELLE KORREKTUR ==============
+async function renderAnswersForReview(round){
+  const snap = await get(ref(db, `games/${gameId}/players`));
+  const players = snap.val() || {};
+
+  answerReview.innerHTML = "";
+
+  Object.entries(players).forEach(([pid,p])=>{
+    const ansObj = p.answers?.[round] || { text:"(keine Antwort)", correct:false };
+    const ansTxt = ansObj.text || "(keine Antwort)";
+    const ok = !!ansObj.correct;
+
+    const row = document.createElement("div");
+    row.className="playerRow";
+    row.dataset.pid = pid;
+
+    row.innerHTML = `
+      <div>
+        <b>${p.name}</b> <span class="tag">Runde ${round+1}</span><br>
+        <span class="meta">${ansTxt}</span>
+      </div>
+      <div>
+        <button class="btn ghost markBtn" data-value="true"
+          style="background:${ok ? "#16a34a" : "#334155"}">✅</button>
+
+        <button class="btn ghost markBtn" data-value="false"
+          style="background:${!ok ? "#dc2626" : "#334155"}">❌</button>
+      </div>
+    `;
+    answerReview.appendChild(row);
+  });
+
+  // Klick-Events
+  answerReview.querySelectorAll(".markBtn").forEach(btn=>{
+    btn.onclick = ()=>{
+      const wrap = btn.parentElement;
+      wrap.querySelectorAll(".markBtn").forEach(b=>b.style.background="#334155");
+
+      const val = btn.dataset.value === "true";
+      btn.style.background = val ? "#16a34a" : "#dc2626";
+
+      btn.closest(".playerRow").dataset.mark = val.toString();
+    };
+  });
+
+  // Speichern
+  saveManualBtn.onclick = async ()=>{
+    const rows = [...answerReview.querySelectorAll(".playerRow")];
+    const changes = {};
+
+    for (const row of rows) {
+      if (row.dataset.mark === undefined) continue;
+
+      const pid = row.dataset.pid;
+      const mark = row.dataset.mark === "true";
+
+      const psnap = await get(ref(db, `games/${gameId}/players/${pid}`));
+      const p = psnap.val();
+      const oldCorrect = p.answers?.[round]?.correct || false;
+
+      let newScore = p.score || 0;
+      if (mark && !oldCorrect) newScore += POINTS;
+      if (!mark && oldCorrect) newScore -= POINTS;
+
+      changes[`games/${gameId}/players/${pid}/answers/${round}/correct`] = mark;
+      changes[`games/${gameId}/players/${pid}/score`] = newScore;
+    }
+
+    if(Object.keys(changes).length)
+      await update(ref(db), changes);
+
+    alert("Korrekturen gespeichert ✔️");
+
+    await renderTop5();
+    await renderAnswersForReview(round);
+  };
+}
+
+// ============== TOP 5 / FINALE LISTE ==============
+async function renderTop5(){
+  const snap = await get(ref(db, `games/${gameId}/players`));
+  const arr = Object.values(snap.val()||{})
+    .map(p=>({name:p.name,score:p.score||0}))
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,5);
+
+  top5El.innerHTML="";
+
+  arr.forEach((p,i)=>{
+    const medal = ["🥇","🥈","🥉"][i] || "🎄";
+    const d=document.createElement("div");
+    d.className="playerRow";
+    d.innerHTML = `<div>${medal} <b>${p.name}</b></div><div>${p.score} Punkte</div>`;
+    top5El.appendChild(d);
+  });
+}
+
+async function renderFinal(){
+  const snap = await get(ref(db, `games/${gameId}/players`));
+  const arr = Object.values(snap.val()||{})
+    .map(p=>({name:p.name,score:p.score||0}))
+    .sort((a,b)=>b.score-a.score);
+
+  finalBoard.innerHTML="";
+
+  arr.forEach((p,i)=>{
+    const medal = ["🥇","🥈","🥉"][i] || "🎄";
+    const d=document.createElement("div");
+    d.className="playerRow";
+    d.innerHTML = `<div>${medal} <b>${p.name}</b></div><div>${p.score} Punkte</div>`;
+    finalBoard.appendChild(d);
+  });
+}
+// ============== PLAYER-FLOW ==============
+
+// URL auslesen
+const url = new URL(window.location.href);
+
+// Spieler kommt über QR-Code → automatisch Join-Screen
+let startMode = "host";
+if (url.searchParams.has("join")) {
+  startMode = "join";
+}
+
+// DOM geladen → richtigen Screen anzeigen
+document.addEventListener("DOMContentLoaded", () => {
+
+  if (startMode === "join") {
+    goto(screenJoin);
+  } else {
+    goto(screenHost);
+  }
+
+  // Spotify Login Button aktivieren
+  const btn = document.getElementById("spotifyLoginBtn");
+  if (btn) btn.onclick = loginSpotify;
+
+  // Spotify Token-Handling
+  handleSpotifyRedirect();
+});
+
+
+// ============== SPIELER tritt bei ==============
+enterBtn.onclick = async ()=>{
+  const gid = joinGameIdI.value.trim().toUpperCase();
+  const name = playerNameI.value.trim();
+
+  if (!gid || !name) {
+    alert("Bitte Spiel-ID und Namen eingeben.");
+    return;
+  }
+
+  const snap = await get(ref(db, `games/${gid}`));
+  if (!snap.exists()) {
+    alert("Spiel nicht gefunden.");
+    return;
+  }
+
+  // Erfolgreich → Spieler registrieren
+  gameId = gid;
+  myName = name;
+  myId = "p_" + Math.random().toString(36).slice(2,10);
+
+  await set(ref(db, `games/${gameId}/players/${myId}`), {
+    name: myName,
+    score: 0,
+    answers: {}
+  });
+
+  gameIdSmall.textContent = gameId;
+  goto(screenPlayer);
+  listenStateAsPlayer();
+};
+
+
+// ============== PLAYER STATE LISTENER ==============
+function listenStateAsPlayer() {
+
+  onValue(ref(db, `games/${gameId}/state`), async snap => {
+    const s = snap.val() || {phase:"waiting", round:0};
+
+    roundNowP.textContent = (s.round || 0) + 1;
+
+    // ===== WAITING =====
+    if (s.phase === "waiting") {
+      show(waitBox);
+      hide(questionBox);
+      hide(solutionBox);
+      return;
+    }
+
+    // ===== QUESTION =====
+    if (s.phase === "question") {
+      const r = s.round;
+
+      emojiEl.textContent = QUESTIONS[r].emoji;
+      ansI.value = "";
+      savedMsg.classList.add("hidden");
+
+      show(questionBox);
+      hide(waitBox);
+      hide(solutionBox);
+
+      const remaining =
+        Math.max(0, ANSWER_SECONDS * 1000 - (Date.now() - s.ts));
+
+      animateProgress(progressBarP, remaining);
+      return;
+    }
+
+    // ===== SOLUTION =====
+    if (s.phase === "solution") {
+      const r = s.round;
+
+      const aSnap = await get(ref(db, `games/${gameId}/players/${myId}/answers/${r}`));
+      const ans = aSnap.val();
+
+      const ok = ans
+        ? ans.correct
+        : fuzzyMatch(ans?.text || "", QUESTIONS[r].title);
+
+      resultIcon.textContent = ok ? "✅" : "❌";
+      resultText.textContent = ok ? "Richtig!" : "Leider falsch!";
+      resultText.className = ok ? "big correct" : "big wrong";
+
+      solutionTextP.textContent = "Lösung: " + QUESTIONS[r].title;
+
+      show(solutionBox);
+      hide(questionBox);
+      hide(waitBox);
+
+      const remaining =
+        Math.max(0, SOLUTION_SECONDS * 1000 - (Date.now() - s.ts));
+
+      animateProgress(progressBarP, remaining);
+      return;
+    }
+
+    // ===== END =====
+    if (s.phase === "end") {
+      hide(questionBox);
+      hide(waitBox);
+      show(solutionBox);
+
+      const snapPlayers = await get(ref(db, `games/${gameId}/players`));
+      const players = snapPlayers.val() || {};
+
+      const arr = Object.entries(players).map(([pid,p]) => ({
+        id: pid,
+        name: p.name,
+        score: p.score || 0
+      })).sort((a,b)=>b.score - a.score);
+
+      const total = arr.length;
+      const myIndex = arr.findIndex(p => p.id === myId);
+      const myPlace = myIndex >= 0 ? myIndex + 1 : null;
+      const myScore = players[myId]?.score || 0;
+
+      resultIcon.textContent = "🎉";
+      resultText.className = "big";
+
+      if (myPlace !== null) {
+        resultText.textContent = `Du bist Platz ${myPlace} von ${total}!`;
+        solutionTextP.textContent = `Deine Punktzahl: ${myScore} Punkte`;
+      } else {
+        resultText.textContent = "Danke fürs Mitspielen!";
+        solutionTextP.textContent = "";
+      }
+    }
+  });
+}
+
+
+// ============== Antwort abschicken ==============
+submitBtn.onclick = async ()=>{
+  const s = await get(ref(db, `games/${gameId}/state`));
+  if (s.val()?.phase !== "question") return;
+
+  const r = s.val().round;
+  const text = ansI.value.trim();
+  if (!text) return;
+
+  await update(ref(db, `games/${gameId}/players/${myId}/answers`), {
+    [r]: { text }
+  });
+
+  savedMsg.classList.remove("hidden");
+  ansI.value = "";
+};
+
+
+// ============== Restart ==============
+restartBtn.onclick = ()=>{
+  location.href = location.origin + location.pathname;
+};
 
