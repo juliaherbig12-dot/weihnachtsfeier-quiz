@@ -324,14 +324,14 @@ function goto(elShow){
   elShow.classList.remove("hidden");
 }
 
-function updateShareLink(id){
-  // URL für QR-Code – ohne Spiel-ID
+function updateShareLink(id) {
+  // 1) QR-Code soll nur zur Join-Seite führen:
   const joinUrl = location.origin + "/?join";
 
-  // Sichtbarer Text: keine ID anzeigen
+  // 2) Textfeld zeigt keinen Link + keine ID
   shareLinkI.value = "QR-Code scannen, dann Spiel-ID eingeben";
 
-  // QR-Code erzeugen
+  // 3) QR-Code erstellen
   const qr = document.getElementById("qrcode");
   qr.innerHTML = "";
   new QRCode(qr, {
@@ -343,6 +343,7 @@ function updateShareLink(id){
     correctLevel: QRCode.CorrectLevel.H
   });
 }
+
 
 
 // State
@@ -638,28 +639,42 @@ async function renderFinal(){
 }
 
 // ============== PLAYER-FLOW ==============
+// ============== PLAYER-FLOW ==============
 const url = new URL(window.location.href);
 
-// Spieler kommt über QR-Code (kein Autocomplete mit ID!)
+// Spieler kommt über QR-Code → direkt Join-Screen
+let startMode = "host";
 if (url.searchParams.has("join")) {
-  goto(screenJoin);
+  startMode = "join";
 }
 
-// Spieler kommt über alten Direktlink (falls es den noch geben soll)
-if (url.searchParams.get("game") && url.searchParams.get("role") === "player") {
-  goto(screenJoin);
-  joinGameIdI.value = url.searchParams.get("game").toUpperCase();
-}
+document.addEventListener("DOMContentLoaded", () => {
 
+  // --- SCREEN auswählen ---
+  if (startMode === "join") {
+    goto(screenJoin);
+  } else {
+    goto(screenHost);
+  }
 
+  // --- Spotify init ---
+  const btn = document.getElementById("spotifyLoginBtn");
+  if (btn) btn.onclick = loginSpotify;
+
+  handleSpotifyRedirect();
+});
+
+// --- Spieler tritt bei ---
 enterBtn.onclick = async ()=>{
   const gid = joinGameIdI.value.trim().toUpperCase();
   const name = playerNameI.value.trim();
 
-  if(!gid || !name) return alert("Bitte Spiel-ID und Namen eingeben.");
+  if(!gid || !name)
+    return alert("Bitte Spiel-ID und Namen eingeben.");
 
   const snap = await get(ref(db, `games/${gid}`));
-  if(!snap.exists()) return alert("Spiel nicht gefunden.");
+  if(!snap.exists())
+    return alert("Spiel nicht gefunden.");
 
   gameId = gid;
   myName = name;
@@ -673,6 +688,57 @@ enterBtn.onclick = async ()=>{
   goto(screenPlayer);
   listenStateAsPlayer();
 };
+
+// ============== PLAYER-FLOW ==============
+const url = new URL(window.location.href);
+
+// Spieler kommt über QR-Code → direkt Join-Screen
+let startMode = "host";
+if (url.searchParams.has("join")) {
+  startMode = "join";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  // --- SCREEN auswählen ---
+  if (startMode === "join") {
+    goto(screenJoin);
+  } else {
+    goto(screenHost);
+  }
+
+  // --- Spotify init ---
+  const btn = document.getElementById("spotifyLoginBtn");
+  if (btn) btn.onclick = loginSpotify;
+
+  handleSpotifyRedirect();
+});
+
+// --- Spieler tritt bei ---
+enterBtn.onclick = async ()=>{
+  const gid = joinGameIdI.value.trim().toUpperCase();
+  const name = playerNameI.value.trim();
+
+  if(!gid || !name)
+    return alert("Bitte Spiel-ID und Namen eingeben.");
+
+  const snap = await get(ref(db, `games/${gid}`));
+  if(!snap.exists())
+    return alert("Spiel nicht gefunden.");
+
+  gameId = gid;
+  myName = name;
+  myId = "p_"+Math.random().toString(36).slice(2,10);
+
+  await set(ref(db, `games/${gameId}/players/${myId}`), {
+    name: myName, score:0, answers:{}
+  });
+
+  gameIdSmall.textContent = gameId;
+  goto(screenPlayer);
+  listenStateAsPlayer();
+};
+
 
 function listenStateAsPlayer(){
   onValue(ref(db, `games/${gameId}/state`), async (snap)=>{
