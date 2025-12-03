@@ -1,4 +1,7 @@
 console.log("[boot] app.js geladen (finale Version)");
+window.onSpotifyWebPlaybackSDKReady = () => {
+  console.log("Spotify SDK ready (Safari-safe)");
+};
 
 // ============== Firebase Setup ==============
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -54,7 +57,11 @@ function loadSpotifySDK() {
 
 async function loginSpotify() {
   const verifier = generateCodeVerifier();
-  localStorage.setItem("spotify_pkce_verifier", verifier);
+  window.location.href = 
+  "https://accounts.spotify.com/authorize?" +
+  params.toString() +
+  "&pkce=" + verifier;  // Safari-sicher
+
 
   const challenge = await generateCodeChallenge(verifier);
   const params = new URLSearchParams({
@@ -73,7 +80,9 @@ async function loginSpotify() {
 }
 
 async function exchangeCodeForToken(code) {
-  const verifier = localStorage.getItem("spotify_pkce_verifier");
+  const url = new URL(window.location.href);
+  const verifier = url.searchParams.get("pkce");
+
 
   const resp = await fetch(tokenEndpoint,{
     method:"POST",
@@ -122,11 +131,25 @@ async function createSpotifyPlayer() {
 }
 
 async function handleSpotifyRedirect() {
-  const p=new URLSearchParams(window.location.search);
+  const p = new URLSearchParams(window.location.search);
+
   if (p.get("code")) {
+
     const tok = await exchangeCodeForToken(p.get("code"));
-    if (tok) await createSpotifyPlayer();
+
+    if (tok) {
+      await createSpotifyPlayer();
+
+      // 🔥 Safari-Fix: URL nach Login aufräumen
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("pkce");
+      clean.searchParams.delete("code");
+      clean.searchParams.delete("state");
+      history.replaceState({}, "", clean.pathname);
+    }
+
   } else {
+
     const stored = localStorage.getItem("spotify_access_token");
     if (stored) {
       spotifyToken = stored;
@@ -134,6 +157,7 @@ async function handleSpotifyRedirect() {
     }
   }
 }
+
 
 // ============== Quiz-Daten ==============
 const QUESTIONS = [
