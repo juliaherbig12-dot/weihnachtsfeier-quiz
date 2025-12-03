@@ -281,6 +281,25 @@ const QUESTIONS = [
   { emoji:"🔜👶❓🎁🔜😁", title:"Morgen, Kinder, wird’s was geben", startMs:7000 }
 ];
 
+// ============== Musik-Tracks (gleichen Reihenfolge wie QUESTIONS) ==============
+const TRACKS = [
+  "spotify:track:4qfPuvrFSxPoKxFPTCgFHG", // 1 Stille Nacht
+  "spotify:track:4L01qPvvrLpzjAU6YewsGQ", // 2 O Tannenbaum
+  "spotify:track:3BFGSCDtnznuaCG2KC9VmO", // 3 Leise rieselt der Schnee
+  "spotify:track:6ZqI26Bd0q0h6RRGMZLZtA", // 4 Alle Jahre wieder
+  "spotify:track:5JMzHxVh9Yx8RJWbR4p9G9", // 5 O du fröhliche
+  "spotify:track:0L3L0a0zDAoFwRKIYYNP6P", // 6 Kling Glöckchen
+  "spotify:track:1adcjxlYjX4jG3Ejj6LikU", // 7 Lasst uns froh und munter sein
+  "spotify:track:6oJ6le65B3SEqPwMRNXWjY", // 8 Jingle Bells
+  "spotify:track:1qU8E4qpG0wQmK7fQBZG1V", // 9 Rudolph
+  "spotify:track:5fgVsemWi9sWnGdCapjK0X", // 10 Last Christmas
+  "spotify:track:0bYg9bo50gSsH3LtXe2SQn", // 11 All I Want for Christmas
+  "spotify:track:1YjK0//9ojJqR0bAKPjW2C", // 12 Ihr Kinderlein kommet
+  "spotify:track:3bN6p0omHeORh1oD7XYe6Y", // 13 We Wish You
+  "spotify:track:2SOfJr5B9ZekNDPd7oUHnW"  // 14 Morgen, Kinder
+];
+
+
 const POINTS           = 125;
 const ANSWER_SECONDS   = 45;
 const SOLUTION_SECONDS = 30;
