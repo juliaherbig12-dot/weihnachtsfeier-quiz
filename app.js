@@ -57,32 +57,35 @@ function loadSpotifySDK() {
 
 async function loginSpotify() {
   const verifier = generateCodeVerifier();
-  window.location.href = 
-  "https://accounts.spotify.com/authorize?" +
-  params.toString() +
-  "&pkce=" + verifier;  // Safari-sicher
-
+  localStorage.setItem("spotify_pkce_verifier", verifier);
 
   const challenge = await generateCodeChallenge(verifier);
+
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
     redirect_uri: redirectUri,
-    code_challenge_method: "S256",
     code_challenge: challenge,
+    code_challenge_method: "S256",
     scope: [
-      "streaming","user-read-email","user-read-private",
-      "user-modify-playback-state","user-read-playback-state"
+      "streaming",
+      "user-read-email",
+      "user-read-private",
+      "user-modify-playback-state",
+      "user-read-playback-state"
     ].join(" ")
   });
 
-  window.location.href = "https://accounts.spotify.com/authorize?" + params;
+  // Safari-Fix: PKCE extra an URL anfügen
+  params.append("pkce", verifier);
+
+  window.location.href = "https://accounts.spotify.com/authorize?" + params.toString();
 }
+
 
 async function exchangeCodeForToken(code) {
   const url = new URL(window.location.href);
-  const verifier = url.searchParams.get("pkce");
-
+  const verifier = url.searchParams.get("pkce") || localStorage.getItem("spotify_pkce_verifier");
 
   const resp = await fetch(tokenEndpoint,{
     method:"POST",
