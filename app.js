@@ -219,8 +219,6 @@ function animateProgress(bar, duration){
 const screenHost = $("#screen-host");
 const hostPanel  = $("#hostPanel");
 const createGameBtn = $("#createGameBtn");
-const joinGameIdHost = $("#joinGameIdHost");
-const joinHostBtn = $("#joinHostBtn");
 const gameIdHost  = $("#gameIdHost");
 const phaseLabel  = $("#phaseLabel");
 const roundNowEl  = $("#roundNow");
@@ -272,20 +270,22 @@ function goto(elShow){
 
 // ============== QR-CODE (Nur Join, NIEMALS ID!) ==============
 function updateShareLink(id) {
-  const joinUrl = location.origin + "/?join";
+  // Fester, funktionierender Link zur Join-Seite
+  const joinUrl = "https://weihnachtsfeier-quiz.vercel.app/?join";
 
   const qr = document.getElementById("qrcode");
   qr.innerHTML = "";
 
   new QRCode(qr, {
     text: joinUrl,
-    width: 160,
-    height: 160,
+    width: 180,
+    height: 180,
     colorDark: "#ffffff",
     colorLight: "#0b1429",
     correctLevel: QRCode.CorrectLevel.H
   });
 }
+
 
 // State
 let gameId = null;
@@ -313,25 +313,6 @@ createGameBtn.onclick = async ()=>{
   }catch(err){
     alert("Fehler: "+err);
   }
-};
-
-// HOST tritt einem existierenden Spiel bei
-joinHostBtn.onclick = async ()=>{
-  const id = joinGameIdHost.value.trim().toUpperCase();
-  if(!id) return alert("Spiel-ID eingeben!");
-
-  const snap = await get(ref(db, `games/${id}`));
-  if(!snap.exists()) return alert("Spiel nicht gefunden.");
-
-  gameId = id;
-  gameIdHost.textContent = id;
-  updateShareLink(id);
-  show(hostPanel);
-
-  listenPlayersInLobby();
-
-  const s = (await get(ref(db, `games/${id}/state`))).val();
-  phaseLabel.textContent = s?.phase || "-";
 };
 
 // ============== LOBBY: Spieler anzeigen ==============
